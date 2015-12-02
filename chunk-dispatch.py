@@ -38,7 +38,7 @@ parser.add_option('--windowMb', help = 'flanking window size in Mb (default 0.25
 parser.add_option('--minimacopt', help = 'options for minimac (default \'--rounds 5 --states 200 --probs\')', metavar = 'OPTIONS',
                   type = 'string', dest = 'minimacopt',
                   default = '--rounds 5 --states 200 --probs')
-parser.add_option('--minimac-path', help = 'full path to minimac binary', metavar = 'MINIMAC',
+parser.add_option('--minimac-path', help = 'full path to minimac executable', metavar = 'MINIMAC',
                   type = 'string', dest = 'minimac',
                   default = '/GWD/appbase/projects/statgen/GXapp/minimac/minimac')
 parser.add_option('--sleep', help = 'sleep until phased haplotypes are done',
@@ -57,14 +57,14 @@ parser.add_option('--submitopt', help = 'append other option(s) for submit comma
 (options, args) = parser.parse_args()
 
 logging.basicConfig(stream=sys.stdout, format='%(levelname)s:%(message)s', level=logging.DEBUG)
-logging.info('minimac chunk dispatcher v0.2 Toby.x.Johnson@gsk.com')
+logging.info('minimac chunk dispatcher v0.3 Toby.x.Johnson@gsk.com')
 
 if len(options.chr) == 0:
-    logging.info('Imputing chromosomes 1-22 (default)')
+    logging.info('Target imputation of chromosomes 1-22 (default)')
     for chridx in range(22): # C style range 0..21
         options.chr.append(str(chridx + 1))
 else:
-    logging.info('Using --chr arguments, imputing only chromosomes [ ' + ','.join(options.chr) + ' ]')
+    logging.info('Using --chr arguments, target impution of chromosomes [ ' + ','.join(options.chr) + ' ]')
 
 if options.chunkMb <= 0:
     logging.error('Invalid --chunkMb argument [ ' + options.chunkMb + ' ], should be positive')
@@ -85,11 +85,11 @@ except ValueError:
     sys.exit(1)
 
 if not os.path.isfile(options.minimac):
-    logging.error('Could not find minimac binary [ ' + options.minimac + ' ]')
+    logging.error('Could not find minimac executable [ ' + options.minimac + ' ]')
     sys.exit(1)
 
 if not os.path.isfile(options.submit):
-    logging.error('Could not find submit binary [ ' + options.submit + ' ]')
+    logging.error('Could not find submit executable [ ' + options.submit + ' ]')
     sys.exit(1)
 
 if not options.submitqueue in ['', 'any', 'default']:
@@ -105,51 +105,12 @@ vcfpath = '/GWD/appbase/projects/statgen/RD-MDD-GX_PUBLIC/1KG/share.sph.umich.ed
 vcfpre = 'chr'
 vcfpost = '.phase1_release_v3.20101123.snps_indels_svs.genotypes.refpanel.ALL.vcf.gz'
 
-
-###
-### Check phased haplotypes exist
-###
-
-if os.path.isabs(options.phased):
-    phasedir = options.phased
-else:
-    phasedir = os.path.abspath(options.phased)
-    logging.info('Inferred absolute path to phased haplotypes [ ' + phasedir + ' ]')
-
-if not os.path.isdir(phasedir):
-    logging.error('Directory [ ' + phasedir + ' ] does not exist')
-    sys.exit(2)
-
-if options.sleep:
-    while True:
-        chrom_waiting = list()
-        for chrom in options.chr:
-            if not os.path.isfile(os.path.join(phasedir, 'chr' + chrom + '.done')):
-                chrom_waiting.append(chrom)
-        if len(chrom_waiting) > 0:
-            logging.info('Chromosomes [ ' + ','.join(chrom_waiting) + ' ] not yet phased, ' + time.strftime('%H:%M %d-%m-%Y') + ' now; sleeping for 1 hour')
-            time.sleep(3600)
-        else:
-            break # break while True loop
-    
-chrom_set = list()
-for chridx in range(22): # C style range 0..21
-    chrom = str(chridx + 1)
-    if os.path.isfile(os.path.join(phasedir, 'chr' + chrom + '.gz')) and \
-       os.path.isfile(os.path.join(phasedir, 'chr' + chrom + '.snps.gz')):
-        chrom_set.append(chrom)
-
-if len(chrom_set) == 0:
-    logging.error('Directory [ ' + phasedir + ' ] does not contain phased haplotypes')
-    sys.exit(2)
-    
-logging.info('Directory [ ' + phasedir + ' ] contains phased haplotypes')
-logging.info('Haplotypes for chromosomes [ ' + ','.join(chrom_set) + ' ]')
-
 ###
 ### Get chromosome begin and end positions from data on last variant in VCF files
 ###
 
+logging.info('Reading chromosome begin and end positions')
+        
 try:
     chrom_begin_fh = open(os.path.join(vcfpath, 'chrbegin.data'), 'r')
 except IOError:
@@ -163,8 +124,7 @@ for chrom_read in chrom_begin_fh.readlines():
         continue
     chrom_data = chrom_read.split(None, 2)
     if len(chrom_data) >= 2:
-        if chrom_set.count(chrom_data[0]):
-            chrom_begin[chrom_data[0]] = int(chrom_data[1])
+        chrom_begin[chrom_data[0]] = int(chrom_data[1])
     else:
         logging.error('Error reading in [ ' + os.path.join(vcfpath, 'chrbegin.data') + ' ]')
 
@@ -184,28 +144,40 @@ for chrom_read in chrom_end_fh.readlines():
         continue
     chrom_data = chrom_read.split(None, 2)
     if len(chrom_data) >= 2:
-        if chrom_set.count(chrom_data[0]):
-            chrom_end[chrom_data[0]] = int(chrom_data[1])
+        chrom_end[chrom_data[0]] = int(chrom_data[1])
     else:
         logging.error('Error reading in [ ' + os.path.join(vcfpath, 'chrend.data') + ' ]')
 
 chrom_end_fh.close()
 logging.info('Read end positions for chromosomes [ ' + ','.join(sorted(chrom_end.keys(), key=int)) + ' ]')
 
-# make temporary list as cannot remove elements from list we are iterating over
-chrom_set_tmp = list()
-for chrom in chrom_set:
-    chrom_set_tmp.append(chrom)
-
+###
+### Remove chromosomes without begin/end positions from options.chr
+###
+chrom_set_tmp = list(options.chr) # temporary copy list, as cannot remove elements from a list we are iterating over
 for chrom in chrom_set_tmp:
-    if not chrom in options.chr:
-        chrom_set.remove(chrom)
     if not chrom in chrom_begin:
-        chrom_set.remove(chrom)
+        options.chr.remove(chrom)
+        logging.info('removed')
     if not chrom in chrom_end:
-        chrom_set.remove(chrom)
+        options.chr.remove(chrom)
+        logging.info('removed')
 
-logging.info('Imputing for chromosomes specified and with haplotypes, begin and end positions [ ' + ','.join(chrom_set) + ' ]') 
+## make more informative logging... XXX
+logging.info('Target imputation of chromosomes, with begin and end positions [ ' + ','.join(options.chr) + ' ]') 
+
+###
+### Check directory for phased haplotypes
+###
+
+if os.path.isabs(options.phased):
+    phasedir = options.phased
+else:
+    phasedir = os.path.abspath(options.phased)
+    logging.info('Inferred absolute path to phased haplotypes [ ' + phasedir + ' ]')
+if not os.path.isdir(phasedir):
+    logging.error('Directory [ ' + phasedir + ' ] does not exist')
+    sys.exit(2)
 
 ###
 ### Check existence/make directories for imputation and job scripts
@@ -229,54 +201,96 @@ for thisdir in [imputedir, jobdir]:
 logging.info('Setting up jobs to output results in [ ' + imputedir + ' ]')
 logging.info('Writing job scripts in [ ' + jobdir + ' ]')
 
-###
-### Calculate chunk start and ends, write job scripts and dispatch
-###
 
+## sleeping loop
+chrom_dispatched = list()
 jobs_done = list()
 jobs_wrote = list()
 jobs_disp = list()
-for chrom in chrom_set:
-    num_chunk = int(math.ceil(float(chrom_end[chrom] - chrom_begin[chrom] + 1) / minimac_chunk_size))
-    logging.info('chr' + chrom + ':' + str(chrom_begin[chrom]) + '-' + str(chrom_end[chrom]) + ' to be split into ' + str(num_chunk) + ' chunks')
-    for chunk in range(num_chunk):
-        chunk_id = str(chunk + 1)
-        chunk_start = str(chunk*minimac_chunk_size + chrom_begin[chrom])
-        chunk_end = str((chunk + 1)*minimac_chunk_size + chrom_begin[chrom] - 1)
-        job_name = 'chr' + chrom + 'chunk' + chunk_id
+while True:
+    ## list of chromosomes to sleep to wait for
+    chrom_todispatch = list(options.chr)
+    for chrom in chrom_dispatched:
+        chrom_todispatch.remove(chrom)
+    logging.info('Chromosomes already dispatched [ ' + ','.join(chrom_dispatched) + ' ]')
+    logging.info('Chromosomes to dispatch [ ' + ','.join(chrom_todispatch) + ' ]')
+    chrom_waiting = list()
+    for chrom in chrom_todispatch:
+        ### Check whether phased haplotypes exist
+        if not os.path.isfile(os.path.join(phasedir, 'chr' + chrom + '.done')):
+            chrom_waiting.append(chrom)
+            continue # for chrom
 
-        if not options.redo and os.path.isfile(os.path.join(imputedir, job_name + '.done')):
-            jobs_done.append(job_name)
-        else:
-            try:
-                job_fh = open(os.path.join(jobdir, job_name + '.sh'), 'w')
-            except IOError:
-                logging.error('Could not write job script [ ' + os.path.join(jobdir, job_name + '.sh') + ' ]')
-                sys.exit(2)
+        if (not os.path.isfile(os.path.join(phasedir, 'chr' + chrom + '.gz'))
+            or not os.path.isfile(os.path.join(phasedir, 'chr' + chrom + '.snps.gz'))):
+            logging.error('.done files exists but phased chromosome .gz and .snps.gz do not')
+            ## print file names XXX
+            sys.exit(2)
 
-            job_fh.write('#!/bin/bash\n')
-            job_fh.write('/bin/uname -a\n')
-            job_fh.write('/bin/echo \'Chunk imputation starting\' $(/bin/date)\n')
-            job_fh.write('/bin/rm -f ' + os.path.join(imputedir, job_name + '.done') + '\n')
-            job_fh.write(options.minimac + ' --vcfReference --refHaps ' + os.path.join(vcfpath, vcfpre + chrom + vcfpost) \
-                         + ' --vcfstart ' + chunk_start + ' --vcfend ' + chunk_end + ' --vcfwindow ' + minimac_window \
-                         + ' --haps ' + os.path.join(phasedir, 'chr' + chrom + '.gz') \
-                         + ' --snps ' + os.path.join(phasedir, 'chr' + chrom + '.snps.gz') \
-                         + ' ' + options.minimacopt \
-                         + ' --prefix ' + os.path.join(imputedir, job_name) \
-                         + ' --gzip' + ' \\\n')
-            job_fh.write('&& /bin/touch ' + os.path.join(imputedir, job_name + '.done') + '\n')
-            job_fh.write('/bin/echo \'Chunk imputation finished\' $(/bin/date)\n')
-            job_fh.close()
-            os.chmod(os.path.join(jobdir, job_name + '.sh'), stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH | stat.S_IWUSR | stat.S_IXUSR )
-            jobs_wrote.append(job_name)
+        logging.info('Found phased haplotypes for chr' + chrom + ' in [ ' + phasedir + ' ]')
+
+        ###
+        ### Calculate chunk start and ends, write job scripts and dispatch
+        ###
+        num_chunk = int(math.ceil(float(chrom_end[chrom] - chrom_begin[chrom] + 1) / minimac_chunk_size))
+        logging.info('chr' + chrom + ':' + str(chrom_begin[chrom]) + '-' + str(chrom_end[chrom]) + ' to be split into ' + str(num_chunk) + ' chunks')
+        for chunk in range(num_chunk):
+            chunk_id = str(chunk + 1)
+            chunk_start = str(chunk*minimac_chunk_size + chrom_begin[chrom])
+            chunk_end = str((chunk + 1)*minimac_chunk_size + chrom_begin[chrom] - 1)
+            job_name = 'chr' + chrom + 'chunk' + chunk_id
+
+            if not options.redo and os.path.isfile(os.path.join(imputedir, job_name + '.done')):
+                jobs_done.append(job_name)
+            else:
+                ## XXX should we overwrite existing job .sh files?
+                try:
+                    job_fh = open(os.path.join(jobdir, job_name + '.sh'), 'w')
+                except IOError:
+                    logging.error('Could not write job script [ ' + os.path.join(jobdir, job_name + '.sh') + ' ]')
+                    sys.exit(2)
+
+                job_fh.write('#!/bin/bash\n')
+                job_fh.write('/bin/uname -a\n')
+                job_fh.write('/bin/echo \'Chunk imputation starting\' $(/bin/date)\n')
+                job_fh.write('/bin/rm -f ' + os.path.join(imputedir, job_name + '.done') + '\n')
+                job_fh.write(options.minimac + ' --vcfReference --refHaps ' + os.path.join(vcfpath, vcfpre + chrom + vcfpost) \
+                             + ' --vcfstart ' + chunk_start + ' --vcfend ' + chunk_end + ' --vcfwindow ' + minimac_window \
+                             + ' --haps ' + os.path.join(phasedir, 'chr' + chrom + '.gz') \
+                             + ' --snps ' + os.path.join(phasedir, 'chr' + chrom + '.snps.gz') \
+                             + ' ' + options.minimacopt \
+                             + ' --prefix ' + os.path.join(imputedir, job_name) \
+                             + ' --gzip' + ' \\\n')
+                job_fh.write('&& /bin/touch ' + os.path.join(imputedir, job_name + '.done') + '\n')
+                job_fh.write('/bin/echo \'Chunk imputation finished\' $(/bin/date)\n')
+                job_fh.close()
+                os.chmod(os.path.join(jobdir, job_name + '.sh'), stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH | stat.S_IWUSR | stat.S_IXUSR )
+                jobs_wrote.append(job_name)
             
-            if options.dispatch:
-                subprocess.call([options.submit] + options.submitopt + \
-                                ['--outfile=' + os.path.join(jobdir, job_name + '.out'), \
-                                 '--errfile=' + os.path.join(jobdir, job_name + '.err'), \
-                                 os.path.join(jobdir, job_name + '.sh')])
-                jobs_disp.append(job_name)
+                if options.dispatch:
+                    subprocess.call([options.submit] + options.submitopt + \
+                                    ['--outfile=' + os.path.join(jobdir, job_name + '.out'), \
+                                     '--errfile=' + os.path.join(jobdir, job_name + '.err'), \
+                                     os.path.join(jobdir, job_name + '.sh')])
+                    jobs_disp.append(job_name)
+
+        # for chunk end
+        chrom_dispatched.append(chrom)
+        logging.info('All chunks dispatched for chr' + chrom)
+    # for chrom end
+
+    if not options.sleep:
+        logging.info('Chromosomes [ ' + ','.join(chrom_waiting) + ' ] not yet phased, nothing done')
+        break
+    if len(chrom_waiting) > 0:
+        logging.info('Chromosomes [ ' + ','.join(chrom_waiting) + ' ] not yet phased, ' + time.strftime('%H:%M %d-%m-%Y') + ' now; sleeping for 1 hour')
+        time.sleep(3600)
+    else:
+        break # break while True loop
+
+    # Note, will loop forever at this point unless break above
+# while True end
+logging.info('All chromosomes targetted have been dispatched [ ' + ','.join(chrom_dispatched) + ' ]')
 
 if not options.redo and len(jobs_done) > 0:
     logging.info('There are ' + str(len(jobs_done)) + ' jobs already done, will only redo with --redo option')
@@ -288,3 +302,11 @@ if len(jobs_wrote) > 0:
         logging.info('Wrote ' + str(len(jobs_wrote)) + ' job descriptions, will only dispatch with --dispatch option')
 
 sys.exit(0)
+
+
+
+##
+
+## warn/error if no phased haplotypes at all
+#        logging.error('Directory [ ' + phasedir + ' ] does not contain phased haplotypes')
+#    sys.exit(2)
