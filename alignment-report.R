@@ -1,12 +1,13 @@
 args <- commandArgs(trailingOnly = TRUE)
 if (length(args) > 0) path <- args[1] else stop("Supply path for alignment directory with --args")
 
-rawfreqfile <- paste(path, "raw-freq.frq", sep = "/") # output of PLINK --freq before filtering
-snplistfile <- paste(path, "snplist.snplist", sep = "/") # output of PLINK --write-snplist after filtering
-liftbase <- paste(path, "chr", sep = "/") # add 1:22 to get imputation-alignment.py output...
-freqfile <- paste(path, "alignment3-freq.frq", sep = "/") # output of PLINK --freq after alignment
-reportmatchfile <- paste(path, "report-match.csv", sep = "/") # file to write report table
-reportfreqfile <- paste(path, "report-freq.csv.gz", sep = "/") # file to write report table
+rawfreqfile <- file.path(path, "raw-freq.frq") # output of PLINK --freq before filtering
+snplistfile <- file.path(path, "snplist.snplist") # output of PLINK --write-snplist after filtering
+liftbase <- file.path(path, "chr") # add 1:22 to get imputation-alignment.py output...
+freqfile <- file.path(path, "alignment3-freq.frq") # output of PLINK --freq after alignment
+reportmatchfile <- file.path(path, "report-match.csv") # file to write report table
+reportfreqfile <- file.path(path, "report-freq.csv.gz") # file to write report table
+reportfreqpng <- file.path(path, "report-freq.png") # file to make png plot
 
 allelesAB <- function(A1, A2, sep = "/") ifelse(A2 < A1, paste(A2, A1, sep = sep), paste(A1, A2, sep = sep))
 freqB <- function(A1, A2, freq1) ifelse(A2 < A1, 1 - freq1, freq1)
@@ -17,7 +18,9 @@ snplist <- scan(snplistfile, character(0))
 chrs <- which(paste("chr", 1:22, sep = "") %in% dir(path))
 stopifnot(length(chrs) >= 1)
 col.names <- sub("^#", "", unlist(strsplit(grep("^#SNP", read.table(paste(liftbase, chrs[1], sep = ""), comment = "", header = FALSE, sep="\n", as.is = TRUE, nrow = 50)[ , 1], value = TRUE), " ")))
-lookup <- do.call("rbind", lapply(chrs, function(chr) read.table(paste(liftbase, chr, sep = ""), comment.char = "#", header = FALSE, col.names = col.names, as.is = TRUE)))
+##15Feb2013 changed to workaround for markers HumanOmni1-Quad_v1/hg18_b36_B with hash (#) symbol in names
+#lookup <- do.call("rbind", lapply(chrs, function(chr) read.table(paste(liftbase, chr, sep = ""), comment.char = "#", header = FALSE, col.names = col.names, as.is = TRUE)))
+lookup <- do.call("rbind", lapply(chrs, function(chr) read.table(paste(liftbase, chr, sep = ""), skip = 1, comment.char = "", header = FALSE, col.names = col.names, as.is = TRUE)))
 frq <- read.table(freqfile, comment.char = "", header = TRUE, as.is = TRUE)
 
 rawfrq <- within(rawfrq, {passFilter <- SNP %in% snplist;
@@ -60,28 +63,14 @@ write.csv(subset(frq, !is.na(freqB) & !is.na(freqBref), select = c("SNP", "OrigS
           file = gzfile(reportfreqfile),
           row.names = FALSE)
 
-
-##pdftemp <- tempfile(fileext = ".pdf")
-##pdf(pdftemp, width = 6, height = 6)
-##with(frq, {plot(freqBref, freqB, type = "n",
-##                xlim = c(0, 1), ylim = c(0, 1),
-##                xlab = "Reference B allele frequency", ylab = "Target B allele frequency", las = 1);
-##           text(freqBref, freqB, allelesAB(A1, A2), cex = 0.3)})
-##dev.off()
-#### reportplot does not exist
-##system(paste("/usr/central/bin/convert -density 144x144", pdftemp, reportplot))
-##system(paste("rm", pdftemp))
-
-
-## post-imputation dataset will not be the only analysis dataset because target variants not present in reference are DROPPED
-## hence exome content found in ESP but not 1KG will not make it...
-
-#png(file = reportplot)
-#with(frq, {plot(freqBref, freqB, type = "n",
-#                xlim = c(0, 1), ylim = c(0, 1),
-#                xlab = "Reference B allele frequency", ylab = "Target B allele frequency", las = 1);
-#           text(freqBref, freqB, allelesAB(A1, A2), cex = 0.3)})
-#dev.off()
-#q()
-
-
+pdftemp <- tempfile(fileext = ".pdf")
+pdf(file = pdftemp, width = 6, height = 6)
+par(mar = c(4, 4, 0, 0) + 0.1)
+with(subset(frq, !is.na(freqB) & !is.na(freqBref)), {
+  plot(freqBref, freqB, type = "n", xlim = c(0, 1), ylim = c(0, 1))
+  text(freqBref, freqB, allelesAB, cex = 0.5)
+})
+dev.off()
+system(paste("/usr/central/bin/convert -density 150x150", pdftemp,
+             "-crop 900x900+0+750", reportfreqpng))
+unlink(pdftemp)
