@@ -29,8 +29,8 @@ where ```StudyID``` is the clinical study ID for a routine instream analysis or 
 
 ## <a name="scripts">Create shell scripts</a>
 Although there are only a few commands required, it is best to run as a shell script to maintain a record of what was done. Specifically, it is best to have two scripts as the process naturally breaks into two steps - the pre-imputation QC and the dispatching of the phasing & imputation jobs. You can copy the template scripts here to the ```AnalysisReadyData``` directory to modify.
-* [Pre-imputation QC](https://github.com/StatGenPRD/GWASImputationPipeline/blob/master/Pre-imputation_QC.sh)
-* [Phase & Impute](https://github.com/StatGenPRD/GWASImputationPipeline/blob/master/Phase_Impute.sh)
+* [Pre-imputation QC](https://raw.githubusercontent.com/StatGenPRD/GWASImputationPipeline/master/Pre-imputation_QC.sh)
+* [Phase & Impute](https://raw.githubusercontent.com/StatGenPRD/GWASImputationPipeline/master/Phase_Impute.sh)
 
 
 ## <a name="retrieve">Refer to data bank retrieval</a>
