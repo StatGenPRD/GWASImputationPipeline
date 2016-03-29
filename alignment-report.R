@@ -19,7 +19,7 @@ freqB <- function(A1, A2, freq1) ifelse(A2 < A1, 1 - freq1, freq1)
 rawfrq <- read.table(gzfile(rawfreqfile), comment.char = "", header = TRUE, as.is = TRUE)
 snplist <- scan(snplistfile, character(0))
 ##use nrow = 50 for efficiency, and assume all chr have the same headers
-chrs <- which(paste("chr", 1:22, ".gz", sep = "") %in% dir(path))
+chrs <- c(1:22, "X")[which(paste("chr", c(1:22, "X"), ".gz", sep = "") %in% dir(path))]
 stopifnot(length(chrs) >= 1)
 col.names <- sub("^#", "", unlist(strsplit(grep("^#SNP", read.table(gzfile(paste(liftbase, chrs[1], ".gz", sep = "")), comment = "", header = FALSE, sep="\n", as.is = TRUE, nrow = 50)[ , 1], value = TRUE), " ")))
 ##15Feb2013 changed to workaround for markers HumanOmni1-Quad_v1/hg18_b36_B with hash (#) symbol in names
