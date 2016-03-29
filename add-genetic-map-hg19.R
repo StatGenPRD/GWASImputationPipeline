@@ -25,24 +25,49 @@ write.table(bim, file = paste(bimfile, "old", sep = "."),
             row.names = FALSE, col.names = FALSE, quote = FALSE)
 
 chrs <- unique(bim$CHR)
-stopifnot(all(chrs %in% 1:22))
+stopifnot(all(chrs %in% 1:23))
 for (chr in chrs) {
-  map <- read.table(gzfile(file.path(mappath, paste("genetic_map_GRCh37_chr", chr, ".txt.gz", sep = ""))),
+  if(chr < 23) {
+    map <- read.table(gzfile(file.path(mappath, paste("genetic_map_GRCh37_chr", chr, ".txt.gz", sep = ""))),
                     comment = "", header = TRUE, as.is = TRUE)
-  names(map) <- sapply(names(map), function(nn) return(unlist(strsplit(nn, ".", fixed = TRUE))[1]))
-  stopifnot(all(c("Chromosome", "Position", "Map") %in% names(map)))
-
-  ## These maps start at non-zero physical position but zero genetic
-  ## map position.  Thus, markers physically left of the first marker
-  ## in the map will be interpolated as having zero genetic
-  ## map positions, which is problematic because (i) HAPI-UR infers
-  ## the existence of a genetic map if the genetic map position of the
-  ## *first* marker (only) is non-zero, and (ii) HAPI-UR requires
-  ## unique map positions for all markers.
-  ##
-  ## Hence we 'nudge' the whole map right, based on average cM/Mb:
-  map$Map <- map$Map + map$Map[nrow(map)]/map$Position[nrow(map)]*map$Position[1]
-
+    names(map) <- sapply(names(map), function(nn) return(unlist(strsplit(nn, ".", fixed = TRUE))[1]))
+    stopifnot(all(c("Chromosome", "Position", "Map") %in% names(map)))
+    ## These maps start at non-zero physical position but zero genetic
+    ## map position.  Thus, markers physically left of the first marker
+    ## in the map will be interpolated as having zero genetic
+    ## map positions, which is problematic because (i) HAPI-UR infers
+    ## the existence of a genetic map if the genetic map position of the
+    ## *first* marker (only) is non-zero, and (ii) HAPI-UR requires
+    ## unique map positions for all markers.
+    ##
+    ## Hence we 'nudge' the whole map right, based on average cM/Mb:
+    map$Map <- map$Map + map$Map[nrow(map)]/map$Position[nrow(map)]*map$Position[1]
+  }
+  if(chr == 23) {
+    map.x <- NULL
+    x.max <- 0
+    for(i in c("X_par1", "X", "X_par2")){
+      map <- read.table(gzfile(file.path(mappath, paste("genetic_map_GRCh37_chr", i, ".txt.gz", sep = ""))),
+                        comment = "", header = TRUE, as.is = TRUE)
+      names(map) <- sapply(names(map), function(nn) return(unlist(strsplit(nn, ".", fixed = TRUE))[1]))
+      stopifnot(all(c("Chromosome", "Position", "Map") %in% names(map)))
+      ## These maps start at non-zero physical position but zero genetic
+      ## map position.  Thus, markers physically left of the first marker
+      ## in the map will be interpolated as having zero genetic
+      ## map positions, which is problematic because (i) HAPI-UR infers
+      ## the existence of a genetic map if the genetic map position of the
+      ## *first* marker (only) is non-zero, and (ii) HAPI-UR requires
+      ## unique map positions for all markers.
+      ##
+      ## Hence we 'nudge' the whole map right, based on average cM/Mb:
+      map$Map <- map$Map + map$Map[nrow(map)]/map$Position[nrow(map)]*map$Position[1] + x.max
+      x.max<- map$Map[nrow(map)]
+      map.x <- rbind(map.x, map)
+    }
+    map.x$Chromosome <-"chr23"
+    map<- map.x
+  }
+  
   ## Interpolation, with 'safe' extremes, left at (0,0) and right based on average cM/Mb
   bim$MAP[bim$CHR == chr] <- 0.01*approx(c(0, map$Position, map$Position[nrow(map)]*1.5),
                                          c(0, map$Map, map$Map[nrow(map)]*1.5),
@@ -59,3 +84,4 @@ bim$BP[bim.na] <- 0
 options(scipen = 15) ## force fixed notation for integer BP positions
 write.table(bim, file = bimfile,
             row.names = FALSE, col.names = FALSE, quote = FALSE, na = "0")
+
