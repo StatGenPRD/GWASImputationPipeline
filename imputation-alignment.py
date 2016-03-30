@@ -174,6 +174,8 @@ for vcfline in vcffh:
     if matchby == 'NAME' :
         thisid = fields[2].lower()
     elif matchby == 'CHRPOS' :
+    	if fields[0] == 'X': #modified by Li Li for chromosome X
+    		fields[0] = '23'  #modified by Li Li for chromosome X
         thisid = fields[0] + ':' + fields[1]
     else :
         logging.error('Internal error matchby not NAME or CHRPOS')
