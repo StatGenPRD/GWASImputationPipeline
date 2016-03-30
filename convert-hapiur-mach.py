@@ -49,7 +49,7 @@ for mapline in mapfh:
         sys.exit(1)
     snpname.append(mapinfo[0])
     snpalleles.append([mapinfo[5], mapinfo[4]]) # columns 5,4 are PLINK alleles A2,A1 coded 0,1 respectively
-
+snpname = [snp.replace('23:', 'X:') for snp in snpname] #replace chromosome 23 with X
 logging.info('Read map information for [ %i ] SNPs from [ %s.phsnp ]', len(snpname), inroot)
 mapfh.close()
 
