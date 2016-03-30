@@ -121,8 +121,7 @@ REFHG19POST := $(REF20130502POST)
 PLINK = $(GXAPP)/plink/plink-1.07/plink
 PLINKOPTS = --noweb
 CONSENSUSMERGE = $(GXAPP)/imputation/consensus-merge.py
-#ALIGNMENTPY = $(GXAPP)/imputation/imputation-alignment.py
-ALIGNMENTPY = /GWD/appbase/projects/statgen/GXapp/GWASImputationPipelineUpdates/ChrX/imputation-alignment-withChrX.py
+ALIGNMENTPY = $(GXAPP)/imputation/imputation-alignment.py
 HAPI2MACH = $(GXAPP)/imputation/convert-hapiur-mach.py
 DFILTER = $(GXAPP)/imputation/dfilter.py
 
@@ -146,12 +145,10 @@ HAPIUROPTS = --win 100
 # setting DISPLAY=:1.0 gives R a dummy display so that png() works
 # but Xlib still depends on fonts...
 R = /GWD/bioinfo/tools/bin/R
-#ADDGENETICMAP = $(GXAPP)/imputation/add-genetic-map-hg19.R
-ADDGENETICMAP = /GWD/appbase/projects/statgen/GXapp/GWASImputationPipelineUpdates/ChrX/add-genetic-map-hg19-ChrX.R
+ADDGENETICMAP = $(GXAPP)/imputation/add-genetic-map-hg19.R
 PDFLATEX = /opt/TWWfsw/TWW/bin/pdflatex
 QCREPORT = qcreport.Rnw
-#ALIGNMENTREPORT = $(GXAPP)/imputation/alignment-report.R
-ALIGNMENTREPORT = /GWD/appbase/projects/statgen/GXapp/GWASImputationPipelineUpdates/ChrX/alignment-report-ChrX.R
+ALIGNMENTREPORT = $(GXAPP)/imputation/alignment-report.R
 
 # for cleaning up before plink --make-bed or --recode jobs #  DO NOT USE FOR OTHER PLINK JOBS
 PLINKEXT = bed bim fam ped map log
