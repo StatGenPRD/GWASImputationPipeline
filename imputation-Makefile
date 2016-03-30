@@ -38,8 +38,8 @@ GXPUBLIC = /GWD/appbase/projects/statgen/RD-MDD-GX_PUBLIC
 ## define paths to application binaries and scripts (GXAPP) and public genetic data (GXPUBLIC)
 ## run make-us1-working.sh to update
 
-TARGETCHRS = 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22
-## chromosomes you wish to phase and impute for
+TARGETCHRS = 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 X
+## chromosomes you wish to phase and impute for, X added by 
 
 ## TO DO:
 ## consider changing name of $(ALIGNEDHG19DIR)/chrN to avoid clashes
@@ -53,6 +53,8 @@ ALIGNMODE = SOFT
 ## see below for explanation; do not edit unless you understand what you are doing
 
 PLINKFILTERS = --geno 0.02 --maf 0.000001
+
+
 ## extra filters to apply to your target *TO MAKE MARKER LIST*
 ## nb subject exclusions will not have any effect on subjects imputed
 ## (but may affect subjects analysed for these qc metrics)
@@ -71,18 +73,20 @@ PLINKFILTERS = --geno 0.02 --maf 0.000001
 ## Streamlined UMich release
 REF20120314PRE = $(GXPUBLIC)/1KG/share.sph.umich.edu/1000genomes/fullProject/2012.03.14/chr
 REF20120314POST = .phase1_release_v3.20101123.snps_indels_svs.genotypes.refpanel.ALL.vcf.gz
+REF20130502PRE = $(GXPUBLIC)/1KG/Phase3/ALL.chr
+REF20130502POST = .phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz
 
 ## Release for GIANT consortium with reference panel singletons removed
-REF20120314NOSINGLETONSPRE = $(GXPUBLIC)/1KG/share.sph.umich.edu/1000genomes/fullProject/2012.03.14/nosingletons/chr
-REF20120314NOSINGLETONSPOST = .phase1_release_v3.20101123.snps_indels_svs.genotypes.refpanel.ALL.vcf.gz
+#REF20120314NOSINGLETONSPRE = $(GXPUBLIC)/1KG/share.sph.umich.edu/1000genomes/fullProject/2012.03.14/nosingletons/chr
+#REF20120314NOSINGLETONSPOST = .phase1_release_v3.20101123.snps_indels_svs.genotypes.refpanel.ALL.vcf.gz
 
 ## for full 1000G release
 #REFMAINPRE = $(GXPUBLIC)/1KG/Release_Feb2012/ALL.chr
 #REFMAINPOST = .phase1_release_v3.20101123.snps_indels_svs.genotypes.vcf.gz
 
 ## Then define reference panels to be used for alignment and prephasing
-REFHG19PRE := $(REF20120314PRE)
-REFHG19POST := $(REF20120314POST)
+REFHG19PRE := $(REF20130502PRE)
+REFHG19POST := $(REF20130502POST)
 
 ## mach prephasing is single-threaded and low RAM, hence good to run with -j [unlimited]
 ## minimac-omp imputation is multi-threaded and potentially high RAM, so should not be further parallelised
@@ -158,9 +162,9 @@ PLINKEXT = bed bim fam ped map log
 
 HARDYSUBGROUPS := $(foreach SUBGROUP,$(SUBGROUPS),$(ALIGNEDHG19DIR)/alignment3-$(SUBGROUP)-hardy.done)
 
-CHRS = 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22
+CHRS = 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 X
 # this is the set of chromosomes to do alignment for.  Even if you wish to phase/impute
-# only specific chromosomes, you should include all chromosomes here in the alignment subtask.
+# only specific chromosomes, you should include all chromosomes here in the alignment subtask. X andded by Li Li
 
 # lists of target SNPs oriented wrt reference; should these be called chrN.alignment????
 ALIGNEDHG19 := $(foreach CHR,$(CHRS),$(ALIGNEDHG19DIR)/chr$(CHR).gz)
