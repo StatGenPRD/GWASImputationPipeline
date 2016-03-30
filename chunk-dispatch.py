@@ -26,12 +26,15 @@ parser.add_option('--chr', help = 'impute specified chromosome(s) only', metavar
 parser.add_option('-p', '--phased', help = 'directory for phased haplotypes (default phased-hapiur-hg19)', metavar = 'DIR',
                   type = 'string', dest = 'phased',
                   default = 'phased-hapiur-hg19')
-parser.add_option('-i', '--imputed', help = 'directory for imputed chunks (default imputed-20120314)', metavar = 'DIR',
+parser.add_option('-i', '--imputed', help = 'directory for imputed chunks (default imputed-20130502)', metavar = 'DIR',
                   type = 'string', dest = 'imputed',
-                  default = 'imputed-20120314')
-parser.add_option('--chunkMb', help = 'chunk size in Mb (default 7)', metavar = 'MB',
+                  default = 'imputed-20130502')
+parser.add_option('-n', '--name', help = 'job name (default chr[chr] or JOBNAME for chr 23)', metavar = 'JOBNAME',
+                  type = 'string', dest = 'jobname',
+                  default = '')
+parser.add_option('--chunkMb', help = 'chunk size in Mb (default 4)', metavar = 'MB',
                   type = 'float', dest = 'chunkMb',
-                  default = 7.)
+                  default = 4.)
 parser.add_option('--windowMb', help = 'flanking window size in Mb (default 0.25)', metavar = 'MB',
                   type = 'float', dest = 'windowMb',
                   default = 0.25)
@@ -101,9 +104,9 @@ logging.info('Submit command is [ ' + options.submit + ' ' + ' '.join(options.su
 ### Hard coded paths for us1us
 ###
 
-vcfpath = '/GWD/appbase/projects/statgen/RD-MDD-GX_PUBLIC/1KG/share.sph.umich.edu/1000genomes/fullProject/2012.03.14/nosingletons'
-vcfpre = 'chr'
-vcfpost = '.phase1_release_v3.20101123.snps_indels_svs.genotypes.refpanel.ALL.vcf.gz'
+vcfpath = '/GWD/appbase/projects/statgen/RD-MDD-GX_PUBLIC/1KG/share.sph.umich.edu/1000genomes/fullProject/2013.05.02'
+vcfpre = 'reduced.ALL.chr'
+vcfpost = '.phase3_shapeit2_mvncall_integrated_v5.20130502.genotypes.vcf.gz'
 
 ###
 ### Get chromosome begin and end positions from data on last variant in VCF files
@@ -215,14 +218,25 @@ while True:
     logging.info('Chromosomes already dispatched [ ' + ','.join(chrom_dispatched) + ' ]')
     logging.info('Chromosomes to dispatch [ ' + ','.join(chrom_todispatch) + ' ]')
     chrom_waiting = list()
-    for chrom in chrom_todispatch:
+    for chrom in chrom_todispatch:    	
+    	## chrX: modified by Li Li
+    	if chrom == '23':
+            xregion = options.jobname.split('-')[-1]
+            phased = 'chr' + chrom + '-' + xregion
+            ref_file = os.path.join(vcfpath, vcfpre + 'X.no.auto' + vcfpost)
+            if 'par' in xregion:
+            	ref_file = os.path.join(vcfpath, vcfpre + 'X.auto' + vcfpost)
+        else:
+        	phased = 'chr' + chrom 
+        	ref_file = os.path.join(vcfpath, vcfpre + chrom + vcfpost)
+        	
         ### Check whether phased haplotypes exist
-        if not os.path.isfile(os.path.join(phasedir, 'chr' + chrom + '.done')):
+        if not os.path.isfile(os.path.join(phasedir, phased + '.done')):
             chrom_waiting.append(chrom)
             continue # for chrom
 
-        if (not os.path.isfile(os.path.join(phasedir, 'chr' + chrom + '.gz'))
-            or not os.path.isfile(os.path.join(phasedir, 'chr' + chrom + '.snps.gz'))):
+        if (not os.path.isfile(os.path.join(phasedir, phased + '.gz'))
+            or not os.path.isfile(os.path.join(phasedir, phased + '.snps.gz'))):
             logging.error('.done files exists but phased chromosome .gz and .snps.gz do not')
             ## print file names XXX
             sys.exit(2)
@@ -233,13 +247,13 @@ while True:
         ### Calculate chunk start and ends, write job scripts and dispatch
         ###
         num_chunk = int(math.ceil(float(chrom_end[chrom] - chrom_begin[chrom] + 1) / minimac_chunk_size))
-        logging.info('chr' + chrom + ':' + str(chrom_begin[chrom]) + '-' + str(chrom_end[chrom]) + ' to be split into ' + str(num_chunk) + ' chunks')
+        logging.info(phased + ':' + str(chrom_begin[chrom]) + '-' + str(chrom_end[chrom]) + ' to be split into ' + str(num_chunk) + ' chunks')
         for chunk in range(num_chunk):
             chunk_id = str(chunk + 1)
             chunk_start = str(chunk*minimac_chunk_size + chrom_begin[chrom])
-            chunk_end = str((chunk + 1)*minimac_chunk_size + chrom_begin[chrom] - 1)
-            job_name = 'chr' + chrom + 'chunk' + chunk_id
-
+            chunk_end = str((chunk + 1)*minimac_chunk_size + chrom_begin[chrom] - 1)            
+            job_name = phased + 'chunk' + chunk_id
+           
             if not options.redo and os.path.isfile(os.path.join(imputedir, job_name + '.done')):
                 jobs_done.append(job_name)
             else:
@@ -254,10 +268,10 @@ while True:
                 job_fh.write('/bin/uname -a\n')
                 job_fh.write('/bin/echo \'Chunk imputation starting\' $(/bin/date)\n')
                 job_fh.write('/bin/rm -f ' + os.path.join(imputedir, job_name + '.done') + '\n')
-                job_fh.write(options.minimac + ' --vcfReference --refHaps ' + os.path.join(vcfpath, vcfpre + chrom + vcfpost) \
+                job_fh.write(options.minimac + ' --vcfReference --refHaps ' + ref_file \
                              + ' --vcfstart ' + chunk_start + ' --vcfend ' + chunk_end + ' --vcfwindow ' + minimac_window \
-                             + ' --haps ' + os.path.join(phasedir, 'chr' + chrom + '.gz') \
-                             + ' --snps ' + os.path.join(phasedir, 'chr' + chrom + '.snps.gz') \
+                             + ' --haps ' + os.path.join(phasedir, phased + '.gz') \
+                             + ' --snps ' + os.path.join(phasedir, phased + '.snps.gz') \
                              + ' ' + options.minimacopt \
                              + ' --prefix ' + os.path.join(imputedir, job_name) \
                              + ' --gzip' + ' \\\n')
@@ -276,7 +290,7 @@ while True:
 
         # for chunk end
         chrom_dispatched.append(chrom)
-        logging.info('All chunks dispatched for chr' + chrom)
+        logging.info('All chunks dispatched for ' + phased)
     # for chrom end
 
     if not options.sleep:
