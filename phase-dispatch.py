@@ -32,6 +32,9 @@ parser.add_option('-a', '--algorithm', help = 'phasing algorithm (auto, hapiur, 
 parser.add_option('-p', '--phased', help = 'directory for phased haplotypes (default phased-ALGORITHM-hg19)', metavar = 'DIR',
                   type = 'string', dest = 'phased',
                   default = '')
+parser.add_option('-n', '--name', help = 'job name (default chr[chr] or JOBNAME for chr 23)', metavar = 'JOBNAME',
+                  type = 'string', dest = 'jobname',
+                  default = '')
 parser.add_option('--plinkopt', help = 'options for PLINK (default \'--noweb\')', metavar = 'OPTIONS',
                   type = 'string', dest = 'plinkopt', default = '--noweb')
 parser.add_option('--hapiur-win', help = 'HAPI-UR window size (default 0 = automatic)', metavar = 'INTEGER',
@@ -152,7 +155,7 @@ else:
 ##
 logging.info('Counting markers in [ ' + options.genotypes + '.bim ]')
 chrom_counts = dict()
-for chridx in range(22): # C style range 0..21
+for chridx in range(23): # C style range 0..21 #add 22 for chrX by Li Li
     chrom = str(chridx + 1)
     chrom_counts[chrom] = 0
 
@@ -177,7 +180,7 @@ for chrom in sorted(chrom_counts.keys(), key=int):
     if chrom_counts[chrom] > 0:
         chrom_set.append(chrom)
         marker_total += chrom_counts[chrom]
-logging.info('There are ' + str(marker_total) + ' markers on ' + str(len(chrom_set)) + ' autosomes')
+logging.info('There are ' + str(marker_total) + ' markers on ' + str(len(chrom_set)) + ' chromosomes') #changed autosomes to chromosomes
 
 ## Williams et al. recommend extrapolating linearly using their marker densities and window sizes
 ## so that for A autosomal markers, window size would be (90 - 64)/(755008 - 386353) * (A - 386353) + 64
@@ -253,6 +256,8 @@ jobs_wrote = list()
 jobs_disp = list()
 for chrom in chrom_set:
     job_name = 'chr' + chrom
+    if options.jobname != '':
+    	job_name = options.jobname
     if not options.redo and os.path.isfile(os.path.join(phasedir, job_name + '.done')):
         jobs_done.append(job_name)
     else:
@@ -271,47 +276,47 @@ for chrom in chrom_set:
             job_fh.write('/bin/rm -f ' + os.path.join(phasedir, job_name + '.done') + '\n')
             job_fh.write(options.plink + ' ' + options.plinkopt \
                          + ' --bfile ' + options.genotypes + ' --chr ' + chrom \
-                         + ' --recode --out ' + os.path.join(phasedir, 'chr' + chrom) \
+                         + ' --recode --out ' + os.path.join(phasedir, job_name) \
                          + '\n')
-            job_fh.write('/bin/gzip -f ' + os.path.join(phasedir, 'chr' + chrom + '.ped') + ' && \\\n')
+            job_fh.write('/bin/gzip -f ' + os.path.join(phasedir, job_name + '.ped') + ' && \\\n')
             job_fh.write('(/bin/echo "T PHENOTYPE";'
-                         + ' /bin/awk \'{print "M " $1 ":" $4}\' ' + os.path.join(phasedir, 'chr' + chrom + '.map') + ')' \
-                         + ' | /bin/gzip - >' + os.path.join(phasedir, 'chr' + chrom + '.dat.gz') \
+                         + ' /bin/awk \'{print "M " $1 ":" $4}\' ' + os.path.join(phasedir, job_name + '.map') + ')' \
+                         + ' | /bin/gzip - >' + os.path.join(phasedir, job_name + '.dat.gz') \
                          + '\n')
             job_fh.write(options.mach \
-                         + ' --datfile ' + os.path.join(phasedir, 'chr' + chrom + '.dat.gz') \
-                         + ' --pedfile ' + os.path.join(phasedir, 'chr' + chrom + '.ped.gz') \
+                         + ' --datfile ' + os.path.join(phasedir, job_name + '.dat.gz') \
+                         + ' --pedfile ' + os.path.join(phasedir, job_name + '.ped.gz') \
                          + ' --phase ' + options.machopt \
-                         + ' --prefix ' + os.path.join(phasedir, 'chr' + chrom) \
+                         + ' --prefix ' + os.path.join(phasedir, job_name) \
 ## no log file because overwrites PLINK --recode logfile; merge back into main Makefile
                          + '\n')
-            job_fh.write('/bin/zcat ' + os.path.join(phasedir, 'chr' + chrom + '.dat.gz') \
-                         + ' | /bin/awk \'$1 == "M" {print $2}\'' \
-                         + ' | /bin/gzip - >' + os.path.join(phasedir, 'chr' + chrom + '.snps.gz') \
+            job_fh.write('/bin/zcat ' + os.path.join(phasedir, job_name + '.dat.gz') \
+                         + ' | /bin/awk \'$1 == "M" {gsub("23:", "X:"); print $2}\'' \
+                         + ' | /bin/gzip - >' + os.path.join(phasedir, job_name + '.snps.gz') \
                          + '\n')
             job_fh.write('/bin/grep \'Analysis took\' ' \
-                         + os.path.join(phasedir, 'chr' + chrom + '.log') \
+                         + os.path.join(phasedir, job_name + '.log') \
                          + ' >' + os.path.join(phasedir, job_name + '.done') + '\n')
         elif options.algorithm == 'hapiur':
             job_fh.write('/bin/echo \'HAPI-UR phasing starting\' $(/bin/date)\n')
             job_fh.write('/bin/rm -f ' + os.path.join(phasedir, job_name + '.done') + '\n')
             job_fh.write(options.plink + ' ' + options.plinkopt \
                          + ' --bfile ' + options.genotypes + ' --chr ' + chrom \
-                         + ' --make-bed --out ' + os.path.join(phasedir, 'chr' + chrom) \
+                         + ' --make-bed --out ' + os.path.join(phasedir, job_name) \
                          + '\n')
             ## $(R) --vanilla --args $(subst .gz,.bim,$@) <$(ADDGENETICMAP) >/dev/null 2>/dev/null
             job_fh.write(options.hapiur + ' --win ' + str(options.hapiurwin) \
-                         + ' --plink ' + os.path.join(phasedir, 'chr' + chrom) \
-                         + ' --out ' + os.path.join(phasedir, 'chr' + chrom + '-hapiur') \
-                         + ' >' + os.path.join(phasedir, 'chr' + chrom + '-hapiur.progress') \
+                         + ' --plink ' + os.path.join(phasedir, job_name) \
+                         + ' --out ' + os.path.join(phasedir, job_name + '-hapiur') \
+                         + ' >' + os.path.join(phasedir, job_name + '-hapiur.progress') \
                          + '\n')
-            job_fh.write('/bin/gzip -f ' + os.path.join(phasedir, 'chr' + chrom + '-hapiur.phgeno') + '\n')
+            job_fh.write('/bin/gzip -f ' + os.path.join(phasedir, job_name + '-hapiur.phgeno') + '\n')
             job_fh.write(options.hapi2mach \
-                         + ' ' + os.path.join(phasedir, 'chr' + chrom + '-hapiur') \
-                         + ' ' + os.path.join(phasedir, 'chr' + chrom) \
+                         + ' ' + os.path.join(phasedir, job_name + '-hapiur') \
+                         + ' ' + os.path.join(phasedir, job_name) \
                          + '\n')
             job_fh.write('/bin/grep \'Total wall clock time\' ' \
-                         + os.path.join(phasedir, 'chr' + chrom + '-hapiur.progress') \
+                         + os.path.join(phasedir, job_name + '-hapiur.progress') \
                          + ' >' + os.path.join(phasedir, job_name + '.done') + '\n')
         else:
             logging.error('Algorithm [ ' + options.algorithm + ' ] not implemented; must be --algorithm=mach or --algorithm=hapiur')
@@ -319,7 +324,6 @@ for chrom in chrom_set:
             sys.exit(1)
 
         job_fh.write('/bin/touch ' + os.path.join(phasedir, job_name + '.done') + '\n')
-
         if options.algorithm == 'mach':
             job_fh.write('/bin/echo \'MACH phasing finished\' $(/bin/date)\n')
         elif options.algorithm == 'hapiur':
@@ -335,7 +339,7 @@ for chrom in chrom_set:
         thisopt = list(options.submitopt) # must not modify options for other chromosomes
         if options.submitmem > 0:
             submitmem = '--memory=' + str(max(int(float(chrom_counts[chrom])*options.submitmem*1e-3) + 1, 2)) + 'g'
-            logging.info('chr' + chrom + ' appending option for submit command [ ' + submitmem + ' ]')
+            logging.info(job_name + ' appending option for submit command [ ' + submitmem + ' ]')
             thisopt.append(submitmem)
         
         if options.dispatch:
