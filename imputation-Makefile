@@ -1,434 +1,215 @@
-## imputation-Makefile version 2.0
-## Makefile for GNU make, written by Toby.x.Johnson@gsk.com
-## if you cannot understand this file, read http://www.gnu.org/software/make/manual
+#!/usr/bin/python
+import gzip
+import logging
+import string
+import sys
 
-## edit the following line to the basename (without .bed .bim .fam extensions)
-## of your clean (QCed) TOP strand genotype data
-## e.g. TOPSOURCE = /path/to/gaf/PgxNNNN/genotypes/myplink
-TOPSOURCE = genotypes/topclean
+logging.basicConfig(format='%(levelname)s:%(message)s') # can add level=logging.DEBUG
+## logging to stderr
+logging.info('1KG VCF alignment (lookup/liftover) tool v0.2 Toby.x.Johnson@gsk.com') # should these go into output?
 
-## edit the following line to the appropriate directory for the genotyping platform used
-## e.g. REF = /GWD/appbase/projects/statgen/RD-MDD-GX_PUBLIC/Illumina_Product_Files/Human1Mv1/hg18_b36_C/hg19_reference_resolution
-## e.g. REF = /GWD/appbase/projects/statgen/RD-MDD-GX_PUBLIC/Illumina_Product_Files/HumanOmni1-Quad_v1/hg18_b36_B/hg19_reference_resolution
-## e.g. REF = /GWD/appbase/projects/statgen/RD-MDD-GX_PUBLIC/Illumina_Product_Files/HumanOmni5-Quad_v1/hg19_b37_B_Jun-2011/hg19_reference_resolution
-## e.g. REF = /GWD/appbase/projects/statgen/RD-MDD-GX_PUBLIC/Illumina_Product_Files/HumanOmniExpressExome-8_v1/hg19_b37_A/hg19_reference_resolution
-REF = /GWD/appbase/projects/statgen/RD-MDD-GX_PUBLIC/Illumina_Product_Files/HumanOmniExpressExome-8_v1/hg19_b37_A/hg19_reference_resolution
+### notes:
+### MATCHBY=NAME matches on lower case of SNP ID
+### matches on BOTH alleles, hence SOFT and HARD liftovers both drop monomorphic SNPs that PLINK calls 0/A etc
 
-## SUBGROUPS will be used to make a QC report; must supply $(GENOTYPESDIR)/%.subjects with % for each subgroup...
-## set to ALL (will be automatically generated) if no other subgroups can be defined
-SUBGROUPS = ALL EUR ASN
-
-## edit the following lines to directories where output will be placed
-GENOTYPESDIR = genotypes
-ALIGNEDHG19DIR = aligned-hg19
-PHASEDMACHHG19DIR = phased-mach-hg19
-PHASEDHAPIURHG19DIR = phased-hapiur-hg19
-
-
-## noedit below here
-
-## jobs to do:
-## direct output of consensus-merge somewhere sensible
-
-## choose mach or hapiur
-PHASEPREF = $(PHASEDMACHHG19DIR)
-
-GXAPP = /GWD/appbase/projects/statgen/GXapp
-GXPUBLIC = /GWD/appbase/projects/statgen/RD-MDD-GX_PUBLIC
-## define paths to application binaries and scripts (GXAPP) and public genetic data (GXPUBLIC)
-## run make-us1-working.sh to update
-
-TARGETCHRS = 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22
-## chromosomes you wish to phase and impute for
-
-## TO DO:
-## consider changing name of $(ALIGNEDHG19DIR)/chrN to avoid clashes
-## make reports more verbose, and for post-phasing and imputation
-## handle marker position clashes more elegantly (upstream?)
-
-ALIGNMATCHBY = CHRPOS
-ALIGNMODE = SOFT
-## ALIGNMATCHBY must be either CHRPOS or NAME
-## ALIGNMODE must be either SOFT or HARD
-## see below for explanation; do not edit unless you understand what you are doing
-
-PLINKFILTERS = --geno 0.02 --maf 0.000001
-## extra filters to apply to your target *TO MAKE MARKER LIST*
-## nb subject exclusions will not have any effect on subjects imputed
-## (but may affect subjects analysed for these qc metrics)
-## nb --maf 0 does not work since it includes SNPs with MAF>=0 (weak inequality)
-## imputation-alignment.py will exclude SNPs with alleles 0/[ACGT] but PLINK sometimes knows both alleles
-## if the SNP was polymorphic in a larger sample and data have been passaged through .beds
-## NB since v1b, there is no HW filter (previously, --hwe 0.0000001 did not work well in mixed ethnic/race samples)
-
-## Nomenclature:
-## target (aka scaffold, framework) = sparser, unphased genotype data, typically GWAS array SNPs, with phenotypes
-## reference = denser, phased haplotype data, typically 1000G or HapMap, without phenotypes
-
-
-
-## First define 1000G reference panel(s) for imputation, by release
-## Streamlined UMich release
-REF20120314PRE = $(GXPUBLIC)/1KG/share.sph.umich.edu/1000genomes/fullProject/2012.03.14/chr
-REF20120314POST = .phase1_release_v3.20101123.snps_indels_svs.genotypes.refpanel.ALL.vcf.gz
-
-## Release for GIANT consortium with reference panel singletons removed
-REF20120314NOSINGLETONSPRE = $(GXPUBLIC)/1KG/share.sph.umich.edu/1000genomes/fullProject/2012.03.14/nosingletons/chr
-REF20120314NOSINGLETONSPOST = .phase1_release_v3.20101123.snps_indels_svs.genotypes.refpanel.ALL.vcf.gz
-
-## for full 1000G release
-#REFMAINPRE = $(GXPUBLIC)/1KG/Release_Feb2012/ALL.chr
-#REFMAINPOST = .phase1_release_v3.20101123.snps_indels_svs.genotypes.vcf.gz
-
-## Then define reference panels to be used for alignment and prephasing
-REFHG19PRE := $(REF20120314PRE)
-REFHG19POST := $(REF20120314POST)
-
-## mach prephasing is single-threaded and low RAM, hence good to run with -j [unlimited]
-## minimac-omp imputation is multi-threaded and potentially high RAM, so should not be further parallelised
-## a single instance of minimac-omp with unlimited CPUs may use a lot of RAM (>100Gb...!)
-
-
-## Two align modes are supported:
-##
-## HARD  assumes target map positions and strand are both potentially wrong
-##       excludes SNPS that are not A/C, A/G, C/T or G/T
-##       matches SNP names against reference names to update map position and strand
-##
-## SOFT  assumes target strand is correct
-##       excludes SNPs with allele mismatch to reference, without attempting strand flipping
-##       matches SNP names against reference names to update map position only
-##
-## If at all possible you should remap your SNP positions and strand
-## to the same reference sequence as the reference haplotypes, and use
-## SOFT align mode.
-##
-## If you are unable to remap your SNP positions and strand to the
-## same reference sequence as the reference haplotypes, you can use HARD
-## align mode.  For some older Illumina arrays, which are anyway
-## mostly A/C, A/G, C/T and G/T SNPs, you will not lose too much
-## information.  For older Affymetrix arrays, or newer arrays with
-## e.g. exome coverage, HARD align mode will lose a lot of
-## information.
-
-
-
-# paths to executables, and customisable options
-PLINK = $(GXAPP)/plink/plink-1.07/plink
-PLINKOPTS = --noweb
-CONSENSUSMERGE = $(GXAPP)/imputation/consensus-merge.py
-ALIGNMENTPY = $(GXAPP)/imputation/imputation-alignment.py
-HAPI2MACH = $(GXAPP)/imputation/convert-hapiur-mach.py
-DFILTER = $(GXAPP)/imputation/dfilter.py
-
-MACH1 = $(GXAPP)/mach1/mach1
-MACHOPTS = --rounds 20 --states 200
-# MINIMAC = $(GXAPP)/minimac/minimac-omp --cpus 4
-MINIMAC = $(GXAPP)/minimac/minimac
-MINIMACOPTS = --rounds 5 --states 200 --probs
-MACHADMIX = $(GXAPP)/mach-admix/mach-admix
-# nb MaCH-Admix default options different to MACH/minimac, maybe okay since states chosen nonrandomly
-MACHADMIXOPTS = --rounds 30 --states 100 --dosage --probs
-# new default is 500?
-HAPIUR = $(GXAPP)/hapiur/hapi-ur
-HAPIUROPTS = --win 100
-## Williams et al. recommend extrapolating linearly using their marker densities and window sizes
-## so that for A autosomal markers, window size would be (90 - 64)/(755008 - 386353) * (A - 386353) + 64
-## Hence --win 100 should be sufficient for 1M and OmniExpressExome arrays, but --win 300 might be needed
-## for 5M data with ~4M markers passing QC
-## By private email, Amy Williams suggestned --win 200 might be enough for 5M data
-
-# setting DISPLAY=:1.0 gives R a dummy display so that png() works
-# but Xlib still depends on fonts...
-R = /GWD/bioinfo/tools/bin/R
-ADDGENETICMAP = $(GXAPP)/imputation/add-genetic-map-hg19.R
-PDFLATEX = /opt/TWWfsw/TWW/bin/pdflatex
-QCREPORT = qcreport.Rnw
-ALIGNMENTREPORT = $(GXAPP)/imputation/alignment-report.R
-
-# for cleaning up before plink --make-bed or --recode jobs #  DO NOT USE FOR OTHER PLINK JOBS
-PLINKEXT = bed bim fam ped map log
-
-
-## Could we use other phasing programs?
-# FASTPHASE apparently not accurate AND fast when N is large
-# SHAPEIT http://www.shapeit.fr/ requires commercial licence
-# HAPI-UR (Williams+ 2012 AJHG) requires fine-scale recombination rate map
-# BEAGLE cannot have enough RAM for whole chromosomes
-
-HARDYSUBGROUPS := $(foreach SUBGROUP,$(SUBGROUPS),$(ALIGNEDHG19DIR)/alignment3-$(SUBGROUP)-hardy.done)
-
-CHRS = 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22
-# this is the set of chromosomes to do alignment for.  Even if you wish to phase/impute
-# only specific chromosomes, you should include all chromosomes here in the alignment subtask.
-
-# lists of target SNPs oriented wrt reference; should these be called chrN.alignment????
-ALIGNEDHG19 := $(foreach CHR,$(CHRS),$(ALIGNEDHG19DIR)/chr$(CHR).gz)
-PEDGZHG19 := $(foreach CHR,$(TARGETCHRS),$(ALIGNEDHG19DIR)/chr$(CHR).ped.gz)
-# .ped.gz files are separate targets since they can be used either for MACH phasing or directly for MACH-Admix imputation
-PHASEDMACHHG19 := $(foreach CHR,$(TARGETCHRS),$(PHASEDMACHHG19DIR)/chr$(CHR).gz)
-PHASEDHAPIURHG19 := $(foreach CHR,$(TARGETCHRS),$(PHASEDHAPIURHG19DIR)/chr$(CHR).gz)
-IMPUTED20120314 :=  $(foreach CHR,$(TARGETCHRS),imputed-20120314/chr$(CHR).dose.gz)
-IMPUTED20120314NOSINGLETONS :=  $(foreach CHR,$(TARGETCHRS),imputed-20120314-nosingletons/chr$(CHR).dose.gz)
-IMPUTEDMACHADMIX20120314 :=  $(foreach CHR, $(TARGETCHRS), imputed-machadmix-20120314/chr$(CHR).dose.gz)
-
-.PHONY: clean all aligned-hg19 phased-mach-hg19 phased-hapiur-hg19 imputed-20120314 imputed-20120314-nosingletons imputed-machadmix-20120314
-all: aligned-hg19
-aligned-hg19: $(ALIGNEDHG19) $(ALIGNEDHG19DIR)/report-match.csv
-phased-mach-hg19: $(PHASEDMACHHG19)
-phased-hapiur-hg19: $(PHASEDHAPIURHG19)
-imputed-20120314: $(IMPUTED20120314)
-imputed-20120314-nosingletons: $(IMPUTED20120314NOSINGLETONS)
-imputed-machadmix-20120314: $(IMPUTEDMACHADMIX20120314)
-
-## rules start here
-
-.DELETE_ON_ERROR:
-
-
-## NB saves disk space, does not break dependencies with .done files
-#clean: 
-#	for TMPG in tmp1 tmp2 tmp3 tmp4 tmp5; do rm -f $(GENOTYPESDIR)/$$TMPG.bed $(GENOTYPESDIR)/$$TMPG.bim $(GENOTYPESDIR)/$$TMPG.fam $(GENOTYPESDIR)/$$TMPG.ped $(GENOTYPESDIR)/$$TMPG.map; done
-#clean:
-#	rm -rf $(ALIGNEDHG19DIR) $(PHASEDMACHHG19DIR) $(PHASEDHAPIURHG19DIR)
-## could destroy a lot of CPU effort...
 
 ###
-### $(TOPSOURCE) -> hg19plus
+### parse command line arguments
 ###
-$(GENOTYPESDIR)/tmp1.done: $(TOPSOURCE).bed $(TOPSOURCE).bim $(TOPSOURCE).fam $(REF)/PLINK_flip.list $(REF)/PLINK_extract.list
-	for EXT in $(PLINKEXT); do rm -f $(subst .done,,$@).$$EXT; done
-	$(PLINK) $(PLINKOPTS) --bfile $(TOPSOURCE) --flip $(REF)/PLINK_flip.list --extract $(REF)/PLINK_extract.list --make-bed --out $(GENOTYPESDIR)/tmp1 >/dev/null
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
-	@touch $@
 
-$(GENOTYPESDIR)/tmp2.done: $(GENOTYPESDIR)/tmp1.done $(REF)/PLINK_update_map_chr.list
-	for EXT in $(PLINKEXT); do rm -f $(subst .done,,$@).$$EXT; done
-	$(PLINK) $(PLINKOPTS) --bfile $(GENOTYPESDIR)/tmp1 --update-map $(REF)/PLINK_update_map_chr.list --update-chr --make-bed --out $(GENOTYPESDIR)/tmp2 >/dev/null
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
-	@touch $@
+if len(sys.argv) == 5:
+    matchby = sys.argv[1]
+    mode = sys.argv[2]
+    vcffile = sys.argv[3]
+    markerfile = sys.argv[4]
+else:
+    logging.error('Need four arguments: MATCHBY [name|chrpos], MODE [hard|soft], VCFFILE [reference], and MARKERFILE [target .bim or .frq file]')
+    sys.exit(2)
 
-$(GENOTYPESDIR)/tmp3.done: $(GENOTYPESDIR)/tmp2.done $(REF)/PLINK_update_map.list
-	for EXT in $(PLINKEXT); do rm -f $(subst .done,,$@).$$EXT; done
-	$(PLINK) $(PLINKOPTS) --bfile $(GENOTYPESDIR)/tmp2 --update-map $(REF)/PLINK_update_map.list --make-bed --out $(GENOTYPESDIR)/tmp3 >/dev/null
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
-	@touch $@
-
-$(GENOTYPESDIR)/tmp4.done: $(GENOTYPESDIR)/tmp3.done
-	for EXT in $(PLINKEXT); do rm -f $(subst .done,,$@).$$EXT; done
-	$(PLINK) $(PLINKOPTS) --bfile $(GENOTYPESDIR)/tmp3 --recode --out $(GENOTYPESDIR)/tmp4 >/dev/null
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
-	@touch $@
-
-$(GENOTYPESDIR)/tmp5.done: $(GENOTYPESDIR)/tmp4.done
-	for EXT in $(PLINKEXT); do rm -f $(subst .done,,$@).$$EXT; done
-	$(CONSENSUSMERGE) $(GENOTYPESDIR)/tmp4 $(GENOTYPESDIR)/tmp5 >$(GENOTYPESDIR)/tmp5.log
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
-	@touch $@
-
-$(GENOTYPESDIR)/hg19plus.done: $(GENOTYPESDIR)/tmp5.done
-	for EXT in $(PLINKEXT); do rm -f $(subst .done,,$@).$$EXT; done
-	$(PLINK) $(PLINKOPTS) --file $(GENOTYPESDIR)/tmp5 --make-bed --out $(GENOTYPESDIR)/hg19plus >/dev/null
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
-	@touch $@
+matchby = matchby.strip().upper()
+if matchby in ['NAME', 'CHRPOS'] :
+    logging.info('Match mode is %s', matchby)
+    if matchby == 'NAME' :
+        logging.info('Target markers will be matched to reference markers by name (case insensitive)')
+    elif matchby == 'CHRPOS' :
+        if markerfile.endswith('.frq'):
+            logging.error('Cannot match by position using target .frq file')
+            sys.exit(2)
+        logging.info('Target markers will be matched to reference markers by chromosome and position (build sensitive)')
+else:
+    logging.error('First argument (MATCHBY) must be either \'NAME\' or \'CHRPOS\'')
+    sys.exit(2)
+    
+mode = mode.strip().upper()
+if mode in ['HARD', 'SOFT', 'TEST'] :
+    logging.info('Liftover mode is %s', mode)
+    if mode == 'HARD' :
+        logging.info('Only A/C, A/G, C/T and G/T SNPs will be kept; strand will be flipped to match reference')
+        safealleles = ['A/C', 'A/G', 'C/A', 'C/T', 'G/A', 'G/T', 'T/C', 'T/G']
+    elif mode == 'SOFT' :
+        logging.info('All (A/C, A/G, A/T, C/G, C/T, G/T) SNPs will be kept, if alleles match reference WITHOUT strand flipping')
+        safealleles = ['A/C', 'A/G', 'A/T', 'C/A', 'C/G', 'C/T', 'G/A', 'G/C', 'G/T', 'T/A', 'T/C', 'T/G']
+    elif mode == 'TEST' :
+        logging.info('All SNPs that match reference by name will be kept; USE ONLY FOR PRE-LIFTOVER TESTING')
+else:
+    logging.error('Second argument (MODE) must be either \'HARD\', \'SOFT\', or \'TEST\'')
+    sys.exit(2)
 
 ###
-### hg19plus -> alignment3
+### build dictionary of SNPs to lookup
+### python guarantees(?) lookups average complexity O(1)    
+###   
+
+try:
+    markerfh = open(markerfile, 'r')
+except IOError:
+    logging.error('Cannot open file [ %s ]', markerfile)
+    sys.exit(1)
+
+logging.info('Reading SNP IDs from [ %s ] ...', markerfile)
+snpdict = dict() # keys are ID to match by (lowercase of SNP IDs markerfile, or chr:pos); values are SNP IDs as found in markerfile
+alleledict = dict()
+alleleflipdict = dict()
+flipper = string.maketrans('ACGT', 'TGCA')
+
+if markerfile.endswith('.bim'):
+    for markerline in markerfh:
+        markerinfo = markerline.strip().split()
+        if matchby == 'NAME' :
+            thisname = markerinfo[1].lower()
+            if thisname in snpdict :
+                logging.warning('Excluding repeated instance of marker [ %s ] with non-unique name in [ %s ]', thisname, markerfile)
+            else :
+                snpdict[thisname] = markerinfo[1]
+                alleledict[thisname] = markerinfo[4].upper() + '/' + markerinfo[5].upper()
+                alleleflipdict[thisname] = markerinfo[4].upper().translate(flipper) + '/' + markerinfo[5].upper().translate(flipper)
+        elif matchby == 'CHRPOS' and markerinfo[0] != '0' and markerinfo[3] != '0' :
+            thischrpos = markerinfo[0] + ':' + markerinfo[3]
+            if thischrpos in snpdict :
+                logging.warning('Excluding marker [ %s ] because at same position [ %s ] as marker [ %s ] in [ %s ]', markerinfo[1], thischrpos, snpdict[thischrpos], markerfile)
+            else :
+                snpdict[thischrpos] = markerinfo[1]
+                alleledict[thischrpos] = markerinfo[4].upper() + '/' + markerinfo[5].upper()
+                alleleflipdict[thischrpos] = markerinfo[4].upper().translate(flipper) + '/' + markerinfo[5].upper().translate(flipper)
+elif markerfile.endswith('.frq'):
+    for markerline in markerfh:
+        markerinfo = markerline.strip().split()
+        if markerinfo[1].upper() == 'SNP': continue
+        thisname = markerinfo[1].lower()
+        snpdict[thisname] = markerinfo[1]
+        ## .frq file does not contain position information
+        alleledict[thisname] = markerinfo[2].upper() + '/' + markerinfo[3].upper()
+        alleleflipdict[thisname] = markerinfo[2].upper().translate(flipper) + '/' + markerinfo[3].upper().translate(flipper)
+
+markerfh.close()
+logging.info('Successfully read [ %i ] SNP IDs from [ %s ]', len(snpdict), markerfile)
+
 ###
-# List SNPs passing filters in target
-$(ALIGNEDHG19DIR)/snplist.snplist: $(GENOTYPESDIR)/hg19plus.done
-	mkdir -p $(ALIGNEDHG19DIR)
-	$(PLINK) $(PLINKOPTS) --bfile $(GENOTYPESDIR)/hg19plus $(PLINKFILTERS) --write-snplist --out $(ALIGNEDHG19DIR)/snplist >/dev/null
+### read VCF file and output data matching SNPs to lookup
+###
 
-# Make fake .bim file corresponding to SNPs from previous rule 
-$(ALIGNEDHG19DIR)/snplist.bim: $(GENOTYPESDIR)/hg19plus.done $(ALIGNEDHG19DIR)/snplist.snplist
-	$(DFILTER) 2 $(ALIGNEDHG19DIR)/snplist.snplist <$(GENOTYPESDIR)/hg19plus.bim >$(ALIGNEDHG19DIR)/snplist.bim 
+try:
+    vcffh = gzip.open(vcffile, 'r')
+except IOError:
+    logging.error('Cannot open file [ %s ]', vcffile)
+    sys.exit(1)
 
-# Run python script to align to reference VCF file
-$(ALIGNEDHG19): $(ALIGNEDHG19DIR)/chr%.gz: $(REFHG19PRE)%$(REFHG19POST) $(ALIGNEDHG19DIR)/snplist.bim
-	$(ALIGNMENTPY) $(ALIGNMATCHBY) $(ALIGNMODE) $< $(ALIGNEDHG19DIR)/snplist.bim 2>$@.alignment.log | gzip - >$@
+logging.info('Lookup in [ %s ] ...', vcffile)
+gotfielddefs = 0
+numread = 0;
 
-$(ALIGNEDHG19DIR)/update-map-name: $(ALIGNEDHG19)
-	zcat $(ALIGNEDHG19) | grep -v '^#' | awk '{print $$1 " " $$5 ":" $$6}' >$@
+for vcfline in vcffh:
+    vcfline = vcfline.lstrip() # lstrip() faster than strip() when we don't care about right end
 
-## some safety code to ensure empty flip file for SOFT alignment and
-## no flip file at all for bad alignment definition
-## for non-HARD alignments, alignment.py should output "+" strand matches only
-## but for safety we make an empty flip file AND disable plink --flip (below)
-$(ALIGNEDHG19DIR)/flip: $(ALIGNEDHG19)
-	rm -f $@
-ifeq ($(ALIGNMODE),HARD)
-	zcat $(ALIGNEDHG19) | grep -v '^#' | awk '$$3 == "-" {print $$5 ":" $$6}' >$@
-else ifeq ($(ALIGNMODE),SOFT)
-	touch $@
-endif
+    if vcfline.startswith('##'):
+        # we ignore meta-information lines
+        continue
 
-$(ALIGNEDHG19DIR)/extract: $(ALIGNEDHG19)
-	zcat $(ALIGNEDHG19) | grep -v '^#' | awk '{print $$5 ":" $$6}' >$@
+    if vcfline.startswith('#'):
+        # field definition line
+        if gotfielddefs:
+                logging.error('File [ %s ] has multiple field definition lines', vcffile)
+                sys.exit(1)
 
-# Update target SNP names, flip strand, and keep SNPs in reference haplotypes only
-# According to 
-# http://pngu.mgh.harvard.edu/~purcell/plink/flow.shtml
-# the order of operations is --update-map THEN --flip THEN --extract
-$(ALIGNEDHG19DIR)/alignment0.done: $(GENOTYPESDIR)/hg19plus.done $(ALIGNEDHG19DIR)/update-map-name $(ALIGNEDHG19DIR)/flip $(ALIGNEDHG19DIR)/extract
-	for EXT in $(PLINKEXT); do rm -f $(subst .done,,$@).$$EXT; done
-ifeq ($(ALIGNMODE),HARD)
-	$(PLINK) $(PLINKOPTS) --bfile $(subst .done,,$<) --update-map $(ALIGNEDHG19DIR)/update-map-name --update-name \
-		--flip $(ALIGNEDHG19DIR)/flip --extract $(ALIGNEDHG19DIR)/extract --make-bed --out $(ALIGNEDHG19DIR)/alignment0 >/dev/null
-else ifeq ($(ALIGNMODE),SOFT)
-	$(PLINK) $(PLINKOPTS) --bfile $(subst .done,,$<) --update-map $(ALIGNEDHG19DIR)/update-map-name --update-name \
-		--extract $(ALIGNEDHG19DIR)/extract --make-bed --out $(ALIGNEDHG19DIR)/alignment0 >/dev/null
-endif
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
-	@touch $@
+        fielddefs = vcfline.lstrip('#').split()
+        if len(fielddefs) < 8:
+                logging.error('File [ %s ] must have >=8 field definitions', vcffile)
+                sys.exit(1)
+        if fielddefs[0] != 'CHROM':
+                logging.error('File [ %s ] field definition 1 must be CHROM', vcffile)
+                sys.exit(1)
+        if fielddefs[1] != 'POS':
+                logging.error('File [ %s ] field definition 2 must be POS', vcffile)
+                sys.exit(1)
+        if fielddefs[2] != 'ID':
+                logging.error('File [ %s ] field definition 3 must be ID', vcffile)
+                sys.exit(1)
+        if fielddefs[3] != 'REF':
+                logging.error('File [ %s ] field definition 4 must be REF', vcffile)
+                sys.exit(1)
+        if fielddefs[4] != 'ALT':
+                logging.error('File [ %s ] field definition 5 must be ALT', vcffile)
+                sys.exit(1)
+        if fielddefs[5] != 'QUAL':
+                logging.error('File [ %s ] field definition 6 must be QUAL', vcffile)
+                sys.exit(1)
+        if fielddefs[6] != 'FILTER':
+                logging.error('File [ %s ] field definition 7 must be FILTER', vcffile)
+                sys.exit(1)
+        if fielddefs[7] != 'INFO':
+                logging.error('File [ %s ] field definition 8 must be INFO', vcffile)
+                sys.exit(1)
 
-$(ALIGNEDHG19DIR)/update-map-chr: $(ALIGNEDHG19)
-	zcat $(ALIGNEDHG19) | grep -v '^#' | awk '{print $$5 ":" $$6 " " $$5}' >$@
+        print '#SNP ALLELES STRAND ID CHROM POS REF ALT AC AN'
+        gotfielddefs = 1
+        continue
 
-# Update target SNP chromosomes to match reference haplotypes
-$(ALIGNEDHG19DIR)/alignment1.done: $(ALIGNEDHG19DIR)/alignment0.done $(ALIGNEDHG19DIR)/update-map-chr
-	for EXT in $(PLINKEXT); do rm -f $(subst .done,,$@).$$EXT; done
-	$(PLINK) $(PLINKOPTS) --bfile $(ALIGNEDHG19DIR)/alignment0 --update-map $(ALIGNEDHG19DIR)/update-map-chr --update-chr \
-		--make-bed --out $(ALIGNEDHG19DIR)/alignment1 >/dev/null
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
-	@touch $@
+    if gotfielddefs == 0 :
+        continue
+    
+    ## counter for number of variant (data) lines
+    numread += 1
 
-$(ALIGNEDHG19DIR)/update-map: $(ALIGNEDHG19)
-	zcat $(ALIGNEDHG19) | grep -v '^#' | awk '{print $$5 ":" $$6 " " $$6}' >$@
+    fields = vcfline.split(None, 8) # 'None' means split on whitespace
+    if matchby == 'NAME' :
+        thisid = fields[2].lower()
+    elif matchby == 'CHRPOS' :
+    	if fields[0] == 'X': #modified by Li Li for chromosome X
+    		fields[0] = '23'  #modified by Li Li for chromosome X
+        thisid = fields[0] + ':' + fields[1]
+    else :
+        logging.error('Internal error matchby not NAME or CHRPOS')
+        sys.exit(1)
 
-# Update target SNP physical map positions to match reference haplotypes
-$(ALIGNEDHG19DIR)/alignment2.done: $(ALIGNEDHG19DIR)/alignment1.done $(ALIGNEDHG19DIR)/update-map
-	for EXT in $(PLINKEXT); do rm -f $(subst .done,,$@).$$EXT; done
-	$(PLINK) $(PLINKOPTS) --bfile $(ALIGNEDHG19DIR)/alignment1 --update-map $(ALIGNEDHG19DIR)/update-map \
-		--make-bed --out $(ALIGNEDHG19DIR)/alignment2 >/dev/null
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
-	@touch $@
+    if thisid in snpdict:
 
-# Another make-bed to make sure SNPs are ordered correctly, and add genetic map positions
-$(ALIGNEDHG19DIR)/alignment3.done: $(ALIGNEDHG19DIR)/alignment2.done
-	for EXT in $(PLINKEXT); do rm -f $(subst .done,,$@).$$EXT; done
-	$(PLINK) $(PLINKOPTS) --bfile $(ALIGNEDHG19DIR)/alignment2 --make-bed --out $(ALIGNEDHG19DIR)/alignment3 >/dev/null
-	cp -f $(subst .done,.bim,$@) $(subst .done,.bim.backup,$@)
-	$(R) --vanilla --args $(subst .done,.bim,$@) <$(ADDGENETICMAP) >/dev/null 2>/dev/null
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
-	@touch $@
+        if mode != 'TEST' and alleledict[thisid] not in safealleles :
+            ## okay that safealleles undefined when mode == 'TEST'
+            ## no need to check alleleflipdict, assuming safealleles contains flipped pairs
+            continue
 
-# PLINK runs to make QC reports
-$(ALIGNEDHG19DIR)/raw-freq.done: $(GENOTYPESDIR)/hg19plus.done
-	mkdir -p $(ALIGNEDHG19DIR)
-	for EXT in frq frq.gz log; do rm -f $(subst .done,,$@).$$EXT; done
-	$(PLINK) $(PLINKOPTS) --bfile $(GENOTYPESDIR)/hg19plus --freq --out $(ALIGNEDHG19DIR)/raw-freq >/dev/null
-	gzip -f $(ALIGNEDHG19DIR)/raw-freq.frq
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
-	@touch $@
+        strandmatch = '.'
+        if (alleledict[thisid] == fields[3] + '/' + fields[4]) or (alleledict[thisid] == fields[4] + '/' + fields[3]) :
+            strandmatch = '+'
+        elif (alleleflipdict[thisid] == fields[3] + '/' + fields[4]) or (alleleflipdict[thisid] == fields[4] + '/' + fields[3]) :
+            strandmatch = '-'
+            if mode == 'SOFT' :
+                continue
+        elif mode != 'TEST' :
+            continue
+        
+        infos = fields[7].split(';')
+        infoAC = '.'
+        infoAN = '.'
+        for info in infos:
+            if info.startswith('AC='):
+                infoAC = info[3:]
+            elif info.startswith('AN='):
+                infoAN = info[3:]
 
-$(ALIGNEDHG19DIR)/alignment3-freq.done: $(ALIGNEDHG19DIR)/alignment3.done
-	for EXT in frq frq.gz log; do rm -f $(subst .done,,$@).$$EXT; done
-	$(PLINK) $(PLINKOPTS) --bfile $(ALIGNEDHG19DIR)/alignment3 --freq --out $(ALIGNEDHG19DIR)/alignment3-freq >/dev/null
-	gzip -f $(ALIGNEDHG19DIR)/alignment3-freq.frq
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
-	@touch $@
+        print snpdict[thisid], alleledict[thisid], strandmatch, fields[2], fields[0], fields[1], fields[3], fields[4], infoAC, infoAN
 
-## redundant if ALL is included in subgroups
-$(ALIGNEDHG19DIR)/alignment3-hardy.done: $(ALIGNEDHG19DIR)/alignment3.done
-	for EXT in hwe hwe.gz log; do rm -f $(subst .done,,$@).$$EXT; done
-	$(PLINK) $(PLINKOPTS) --bfile $(ALIGNEDHG19DIR)/alignment3 --hardy --out $(ALIGNEDHG19DIR)/alignment3-hardy >/dev/null
-	gzip -f $(ALIGNEDHG19DIR)/alignment3-hardy.hwe
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
-	@touch $@
+   
+vcffh.close()
 
-$(ALIGNEDHG19DIR)/alignment3-missing.done: $(ALIGNEDHG19DIR)/alignment3.done
-	for EXT in imiss lmiss lmiss.gz log; do rm -f $(subst .done,,$@).$$EXT; done
-	$(PLINK) $(PLINKOPTS) --bfile $(ALIGNEDHG19DIR)/alignment3 --missing --out $(ALIGNEDHG19DIR)/alignment3-missing >/dev/null
-	gzip -f $(ALIGNEDHG19DIR)/alignment3-missing.lmiss
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
-	@touch $@
-
-$(GENOTYPESDIR)/ALL.subjects: $(GENOTYPESDIR)/hg19plus.done
-	awk '{print $$1,$$2}' $(GENOTYPESDIR)/hg19plus.fam >$@
-
-$(HARDYSUBGROUPS): $(ALIGNEDHG19DIR)/alignment3-%-hardy.done: $(GENOTYPESDIR)/%.subjects $(ALIGNEDHG19DIR)/alignment3.done
-	for EXT in hwe hwe.gz log; do rm -f $(subst .done,,$@).$$EXT; done
-	$(PLINK) $(PLINKOPTS) --bfile $(ALIGNEDHG19DIR)/alignment3 --keep $< --hardy --out $(subst .done,,$@) >/dev/null
-	gzip -f $(subst .done,,$@).hwe
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
-	touch $@
-
-#qcreport.tex: $(ALIGNEDHG19DIR)/alignment3-missing.lmiss $(ALIGNEDHG19DIR)/alignment3-freq.frq $(ALIGNEDHG19DIR)/alignment3-hardy.hwe $(HARDYSUBGROUPS)
-#	@echo done.
-
-#qcreport.pdf: qcreport.tex
-#	$(PDFLATEX) $(subst .tex,,$<)
-#	$(PDFLATEX) $(subst .tex,,$<)
-
-
-## THIS WILL BE TOTALLY BROKEN BY GZIPPED $(ALIGNEDHG19)
-
-$(ALIGNEDHG19DIR)/report-match.csv: $(ALIGNEDHG19DIR)/raw-freq.done $(ALIGNEDHG19DIR)/snplist.snplist $(ALIGNEDHG19) $(ALIGNEDHG19DIR)/alignment3-freq.done
-	$(R) --vanilla --args $(ALIGNEDHG19DIR) <$(ALIGNMENTREPORT) >$(ALIGNEDHG19DIR)/report.out 2>$(ALIGNEDHG19DIR)/report.err
-
-# By chromosome, convert to PLINK .ped/.map -> MERLIN .ped.gz/.dat.gz
-$(PEDGZHG19): $(ALIGNEDHG19DIR)/chr%.ped.gz: $(ALIGNEDHG19DIR)/alignment3.done
-	$(PLINK) $(PLINKOPTS) --bfile $(ALIGNEDHG19DIR)/alignment3 --chr $(subst $(ALIGNEDHG19DIR)/chr,,$(subst .ped.gz,,$@)) \
-		--recode --out $(subst .ped.gz,,$@) >/dev/null
-	gzip -f $(subst .gz,,$@)
-	(echo "T PHENOTYPE"; awk '{print "M " $$1 ":" $$4}' $(subst .ped.gz,,$@).map) | gzip - >$(subst .ped.gz,,$@).dat.gz
-
-$(PHASEDMACHHG19): $(PHASEDMACHHG19DIR)/chr%.gz: $(ALIGNEDHG19DIR)/chr%.ped.gz
-	mkdir -p $(PHASEDMACHHG19DIR)
-	$(MACH1) --datfile $(subst .ped.gz,.dat.gz,$<) --pedfile $< --phase $(MACHOPTS) --prefix $(subst .gz,,$@) >$(subst .gz,.log,$@) 
-	zcat $(subst .ped.gz,.dat.gz,$<) | awk '$$1 == "M" {print $$2}' | gzip - >$(subst .gz,,$@).snps.gz
-	grep 'Analysis took' $(subst .gz,.log,$@) >$(subst .gz,,$@).done 
-
-$(PHASEDHAPIURHG19): $(PHASEDHAPIURHG19DIR)/chr%.gz: $(ALIGNEDHG19DIR)/alignment3.done
-	mkdir -p $(PHASEDHAPIURHG19DIR)
-	$(PLINK) $(PLINKOPTS) --bfile $(ALIGNEDHG19DIR)/alignment3 --chr $(subst $(PHASEDHAPIURHG19DIR)/chr,,$(subst .gz,,$@)) \
-		--make-bed --out $(subst .gz,,$@) >/dev/null
-#	$(R) --vanilla --args $(subst .gz,.bim,$@) <$(ADDGENETICMAP) >/dev/null 2>/dev/null
-	$(HAPIUR) $(HAPIUROPTS) --plink $(subst .gz,,$@) --out $(subst .gz,,$@)-hapiur >$(subst .gz,,$@)-hapiur.progress
-# dummy code for consensus from 3 MC runs
-#	$(HAPIUR) $(HAPIUROPTS) --plink $(subst .gz,,$@) --out $(subst .gz,,$@)-hapiur2 >$(subst .gz,,$@)-hapiur2.progress
-#	$(HAPIUR) $(HAPIUROPTS) --plink $(subst .gz,,$@) --out $(subst .gz,,$@)-hapiur3 >$(subst .gz,,$@)-hapiur3.progress
-#	$(VOTEPHASE) $(subst .gz,,$@)-hapiur.phgeno $(subst .gz,,$@)-hapiur2.phgeno $(subst .gz,,$@)-hapiur3.phgeno >tmp.phgeno 
-#	mv -f tmp.phgeno $(subst .gz,,$@)-hapiur.phgeno # BAD RACE CONDITION OVER CHRs
-	gzip -f $(subst .gz,,$@)-hapiur.phgeno
-	$(HAPI2MACH) $(subst .gz,,$@)-hapiur $(subst .gz,,$@)
-	grep 'Total wall clock time' $(subst .gz,,$@)-hapiur.progress >$(subst .gz,,$@).done
-
-# this doesn't work - it's a global setting...
-# .NOTPARALLEL: $(IMPUTED20120314)
-
-### minimac imputation
-
-# Note minimac wants a ".snps" file different to the ".dat" file
-$(IMPUTED20120314): imputed-20120314/chr%.dose.gz: $(PHASEPREF)/chr%.gz $(REF20120314PRE)%$(REF20120314POST)
-	mkdir -p imputed-20120314
-	$(MINIMAC) --vcfReference --refHaps $(REF20120314PRE)$(subst imputed-20120314/chr,,$(subst .dose.gz,,$@))$(REF20120314POST) \
-		--haps $< --snps $(subst .gz,,$<).snps.gz $(MINIMACOPTS) --prefix $(subst .dose.gz,,$@) --gzip >$(subst .dose.gz,.log,$@)
-
-$(IMPUTED20120314NOSINGLETONS): imputed-20120314-nosingletons/chr%.dose.gz: $(PHASEPREF)/chr%.gz $(REF20120314NOSINGLETONSPRE)%$(REF20120314NOSINGLETONSPOST)
-	mkdir -p imputed-20120314-nosingletons
-	$(MINIMAC) --vcfReference --refHaps $(REF20120314NOSINGLETONSPRE)$(subst imputed-20120314-nosingletons/chr,,$(subst .dose.gz,,$@))$(REF20120314NOSINGLETONSPOST) \
-		--haps $< --snps $(subst .gz,,$<).snps.gz $(MINIMACOPTS) --prefix $(subst .dose.gz,,$@) --gzip >$(subst .dose.gz,.log,$@)
-
-### MaCH-admix imputation
-
-$(IMPUTEDMACHADMIX20120314): imputed-machadmix-20120314/chr%.dose.gz: $(ALIGNEDHG19DIR)/chr%.ped.gz
-	mkdir -p imputed-machadmix-20120314
-	$(MACHADMIX) --datfile $(subst .ped.gz,.dat.gz,$<) --pedfile $< \
-		--vcfReference --haps $(REF20120314PRE)$(subst imputed-machadmix-20120314/chr,,$(subst .dose.gz,,$@))$(REF20120314POST) \
-		$(MACHADMIXOPTS) --prefix $(subst .dose.gz,,$@)
-
-### HIBAG HLA imputation (in progress)
-
-hibag/hg19plus-hla.bed: $(GENOTYPESDIR)/hg19plus.done
-	mkdir -p hibag
-	$(PLINK) $(PLINKOPTS) --bfile $(GENOTYPESDIR)/hg19plus $(PLINKFILTERS) --chr 6 --from-bp 28624758 --to-bp 34160245 --make-bed --out $(subst .bed..$@)
-
-## minimac and mach-admix use VCF files for reference haplotypes
-## .dat file requires target SNPs to be described as chr:pos
-## in general, VCF allows multiple variants at same position...
-## zcat $(GXPUBLIC)/1KG/share.sph.umich.edu/1000genomes/fullProject/2012.03.14/chr1.phase1_release_v3.20101123.snps_indels_svs.genotypes.refpanel.ALL.vcf.gz | cut -c-40 | grep -v '^#' | cut -f2 | uniq -c | awk '$1>1' | more
-
-## eg chr1 1:886817
-
+sys.exit(0)
