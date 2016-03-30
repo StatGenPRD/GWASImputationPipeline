@@ -198,9 +198,15 @@ $(STUDY)-autosomal.extract: $(STUDY).bim
 $(STUDY)-autosomalACAG.extract: $(STUDY).bim
 	awk '$$1 >= 1 && $$1 <= 22 && (($$5 == "A" && $$6 == "C") || ($$5 == "C" && $$6 == "A") || ($$5 == "A" && $$6 == "G") || ($$5 == "G" && $$6 == "A")) {print $$2}' $(STUDY).bim >$(STUDY)-autosomalACAG.extract
 
+#chr X added by Li Li: clean3-chr23-par might be empty such that status is reset to true to continue 
 $(STUDY)-clean3.done: $(STUDY)-clean1.done $(STUDY).exclude2 $(STUDY)-autosomal.extract
 	for EXT in bed bim fam log; do rm -f $(STUDY)-clean3.$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(STUDY)-clean1 --extract $(STUDY)-autosomal.extract --exclude $(STUDY).exclude2 --make-bed --out $(STUDY)-clean3 >/dev/null
+	$(PLINK) $(PLINKOPTS) --bfile $(STUDY)-clean1 --chr 23 --exclude $(STUDY).exclude2 --make-bed --out $(STUDY)-clean3-chr23 >/dev/null
+	$(PLINK) $(PLINKOPTS) --bfile $(STUDY)-clean3-chr23  --chr 23 --from-bp 2699520  --to-bp 154931043 --filter-females --make-bed --out $(STUDY)-clean3-chr23-F >/dev/null
+	$(PLINK) $(PLINKOPTS) --bfile $(STUDY)-clean3-chr23  --chr 23 --from-bp 2699520  --to-bp 154931043 --filter-males --make-bed --out $(STUDY)-clean3-chr23-M >/dev/null
+	awk '$$4 < 2699520 || $$4 > 154931043 {print $$2}' $(STUDY)-clean3-chr23-F.bim |awk 'NF>0' >$(STUDY)-chr23-par.extract
+	$(PLINK) $(PLINKOPTS) --bfile $(STUDY)-clean3-chr23  --extract $(STUDY)-chr23-par.extract --make-bed --out $(STUDY)-clean3-chr23-par >/dev/null; true
 	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
 	@touch $@
 
