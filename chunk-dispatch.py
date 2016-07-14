@@ -38,9 +38,9 @@ parser.add_option('--chunkMb', help = 'chunk size in Mb (default 4)', metavar = 
 parser.add_option('--windowMb', help = 'flanking window size in Mb (default 0.25)', metavar = 'MB',
                   type = 'float', dest = 'windowMb',
                   default = 0.25)
-parser.add_option('--minimacopt', help = 'options for minimac (default \'--rounds 5 --states 200 --probs\')', metavar = 'OPTIONS',
+parser.add_option('--minimacopt', help = 'options for minimac (default \'--rounds 5 --states 200\')', metavar = 'OPTIONS',
                   type = 'string', dest = 'minimacopt',
-                  default = '--rounds 5 --states 200 --probs')
+                  default = '--rounds 5 --states 200') #'--rounds 5 --states 200 --probs'
 parser.add_option('--minimac-path', help = 'full path to minimac executable', metavar = 'MINIMAC',
                   type = 'string', dest = 'minimac',
                   default = '/GWD/appbase/projects/statgen/GXapp/minimac/minimac')
