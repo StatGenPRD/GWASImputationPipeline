@@ -1,0 +1,53 @@
+#########################################################
+#Step 1: QC
+#########################################################
+cd /GWD/bioinfo/projects/statgen/GXapp/GWASImputationPipelineUpdates/HMaxiom_1KGP3
+#chmod 777 1_README_qc.sh
+rm 1_qc.log
+bash 1_README_qc.sh >1_qc.log &
+
+#########################################################
+#Step 2: phase
+#run after Step 1
+#########################################################
+cd /GWD/bioinfo/projects/statgen/GXapp/GWASImputationPipelineUpdates/HMaxiom_1KGP3
+#chmod 777 2_README_phase.sh
+rm 2_phase.log
+bash 2_README_phase.sh >2_phase.log &
+
+#########################################################
+#Step 3: impute
+#run after Step 2
+#########################################################
+cd /GWD/bioinfo/projects/statgen/GXapp/GWASImputationPipelineUpdates/HMaxiom_1KGP3
+#chmod 777 3_README_impute.sh
+rm 3_impute.log
+bash 3_README_impute.sh >3_impute.log &
+
+#########################################################
+#Step 4: genotyped variants not in imputation input
+#run after Step 2
+#########################################################
+cd /GWD/bioinfo/projects/statgen/GXapp/GWASImputationPipelineUpdates/HMaxiom_1KGP3
+#chmod 777 4_README_genotyped.sh
+rm 4_genotyped.log
+bash 4_README_genotyped.sh > 4_genotyped.log &
+
+
+#########################################################
+#Step 5: remove extra data in chr23 
+#run after Step 3
+#please modify IMPDIR parameter in 5_README_chrx_rmextra.sh
+#########################################################
+cd /GWD/bioinfo/projects/statgen/GXapp/imputation/GWASImputationPipeline-master
+chmod 777 5_README_chrx_rmextra.sh
+rm 5_chrx_rmextra.log
+bash 5_README_chrx_rmextra.sh > 5_chrx_rmextra.log &
+
+
+#########################################################
+#Step 6: change file permissions 
+#run at the end
+#########################################################
+chmod -R 775 [your imputation folder]
+chgrp -R gxappdev [your imputation folder]
