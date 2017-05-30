@@ -119,8 +119,8 @@ REFHG19POST := $(REF20130502POST)
 
 # paths to executables, and customisable options
 TOUCH = /bin/touch
-PLINK = $(GXAPP)/plink/plink-1.07/plink
-PLINKOPTS = --noweb
+PLINK = /GWD/bioinfo/projects/RD-TSci-Software/CB/linuxbrew/bin/plink2
+PLINKOPTS = 
 CONSENSUSMERGE = $(GXAPP)/imputation/consensus-merge.py
 ALIGNMENTPY = $(GXAPP)/imputation/imputation-alignment.py
 HAPI2MACH = $(GXAPP)/imputation/convert-hapiur-mach.py
@@ -204,37 +204,37 @@ imputed-machadmix-20120314: $(IMPUTEDMACHADMIX20120314)
 $(GENOTYPESDIR)/tmp1.done: $(TOPSOURCE).bed $(TOPSOURCE).bim $(TOPSOURCE).fam $(REF)/PLINK_flip.list $(REF)/PLINK_extract.list
 	for EXT in $(PLINKEXT); do rm -f $(subst .done,,$@).$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(TOPSOURCE) --flip $(REF)/PLINK_flip.list --extract $(REF)/PLINK_extract.list --make-bed --out $(GENOTYPESDIR)/tmp1 >/dev/null
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
+	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
 $(GENOTYPESDIR)/tmp2.done: $(GENOTYPESDIR)/tmp1.done $(REF)/PLINK_update_map_chr.list
 	for EXT in $(PLINKEXT); do rm -f $(subst .done,,$@).$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(GENOTYPESDIR)/tmp1 --update-map $(REF)/PLINK_update_map_chr.list --update-chr --make-bed --out $(GENOTYPESDIR)/tmp2 >/dev/null
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
+	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
 $(GENOTYPESDIR)/tmp3.done: $(GENOTYPESDIR)/tmp2.done $(REF)/PLINK_update_map.list
 	for EXT in $(PLINKEXT); do rm -f $(subst .done,,$@).$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(GENOTYPESDIR)/tmp2 --update-map $(REF)/PLINK_update_map.list --make-bed --out $(GENOTYPESDIR)/tmp3 >/dev/null
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
+	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
 $(GENOTYPESDIR)/tmp4.done: $(GENOTYPESDIR)/tmp3.done
 	for EXT in $(PLINKEXT); do rm -f $(subst .done,,$@).$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(GENOTYPESDIR)/tmp3 --recode --out $(GENOTYPESDIR)/tmp4 >/dev/null
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
+	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
 $(GENOTYPESDIR)/tmp5.done: $(GENOTYPESDIR)/tmp4.done
 	for EXT in $(PLINKEXT); do rm -f $(subst .done,,$@).$$EXT; done
 	$(CONSENSUSMERGE) $(GENOTYPESDIR)/tmp4 $(GENOTYPESDIR)/tmp5 >$(GENOTYPESDIR)/tmp5.log
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
+	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
 $(GENOTYPESDIR)/hg19plus.done: $(GENOTYPESDIR)/tmp5.done
 	for EXT in $(PLINKEXT); do rm -f $(subst .done,,$@).$$EXT; done
 	$(PLINK) $(PLINKOPTS) --file $(GENOTYPESDIR)/tmp5 --make-bed --out $(GENOTYPESDIR)/hg19plus >/dev/null
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
+	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
 ###
@@ -284,7 +284,7 @@ else ifeq ($(ALIGNMODE),SOFT)
 	$(PLINK) $(PLINKOPTS) --bfile $(subst .done,,$<) --update-map $(ALIGNEDHG19DIR)/update-map-name --update-name \
 		--extract $(ALIGNEDHG19DIR)/extract --make-bed --out $(ALIGNEDHG19DIR)/alignment0 >/dev/null
 endif
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
+	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
 $(ALIGNEDHG19DIR)/update-map-chr: $(ALIGNEDHG19)
@@ -295,7 +295,7 @@ $(ALIGNEDHG19DIR)/alignment1.done: $(ALIGNEDHG19DIR)/alignment0.done $(ALIGNEDHG
 	for EXT in $(PLINKEXT); do rm -f $(subst .done,,$@).$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(ALIGNEDHG19DIR)/alignment0 --update-map $(ALIGNEDHG19DIR)/update-map-chr --update-chr \
 		--make-bed --out $(ALIGNEDHG19DIR)/alignment1 >/dev/null
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
+	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
 $(ALIGNEDHG19DIR)/update-map: $(ALIGNEDHG19)
@@ -306,7 +306,7 @@ $(ALIGNEDHG19DIR)/alignment2.done: $(ALIGNEDHG19DIR)/alignment1.done $(ALIGNEDHG
 	for EXT in $(PLINKEXT); do rm -f $(subst .done,,$@).$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(ALIGNEDHG19DIR)/alignment1 --update-map $(ALIGNEDHG19DIR)/update-map \
 		--make-bed --out $(ALIGNEDHG19DIR)/alignment2 >/dev/null
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
+	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
 # Another make-bed to make sure SNPs are ordered correctly, and add genetic map positions
@@ -315,7 +315,7 @@ $(ALIGNEDHG19DIR)/alignment3.done: $(ALIGNEDHG19DIR)/alignment2.done
 	$(PLINK) $(PLINKOPTS) --bfile $(ALIGNEDHG19DIR)/alignment2 --make-bed --out $(ALIGNEDHG19DIR)/alignment3 >/dev/null
 	cp -f $(subst .done,.bim,$@) $(subst .done,.bim.backup,$@)
 	$(R) --vanilla --args $(subst .done,.bim,$@) <$(ADDGENETICMAP) >/dev/null 2>/dev/null
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
+	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
 # PLINK runs to make QC reports
@@ -324,14 +324,14 @@ $(ALIGNEDHG19DIR)/raw-freq.done: $(GENOTYPESDIR)/hg19plus.done
 	for EXT in frq frq.gz log; do rm -f $(subst .done,,$@).$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(GENOTYPESDIR)/hg19plus --freq --out $(ALIGNEDHG19DIR)/raw-freq >/dev/null
 	gzip -f $(ALIGNEDHG19DIR)/raw-freq.frq
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
+	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
 $(ALIGNEDHG19DIR)/alignment3-freq.done: $(ALIGNEDHG19DIR)/alignment3.done
 	for EXT in frq frq.gz log; do rm -f $(subst .done,,$@).$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(ALIGNEDHG19DIR)/alignment3 --freq --out $(ALIGNEDHG19DIR)/alignment3-freq >/dev/null
 	gzip -f $(ALIGNEDHG19DIR)/alignment3-freq.frq
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
+	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
 ## redundant if ALL is included in subgroups
@@ -339,14 +339,14 @@ $(ALIGNEDHG19DIR)/alignment3-hardy.done: $(ALIGNEDHG19DIR)/alignment3.done
 	for EXT in hwe hwe.gz log; do rm -f $(subst .done,,$@).$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(ALIGNEDHG19DIR)/alignment3 --hardy --out $(ALIGNEDHG19DIR)/alignment3-hardy >/dev/null
 	gzip -f $(ALIGNEDHG19DIR)/alignment3-hardy.hwe
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
+	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
 $(ALIGNEDHG19DIR)/alignment3-missing.done: $(ALIGNEDHG19DIR)/alignment3.done
 	for EXT in imiss lmiss lmiss.gz log; do rm -f $(subst .done,,$@).$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(ALIGNEDHG19DIR)/alignment3 --missing --out $(ALIGNEDHG19DIR)/alignment3-missing >/dev/null
 	gzip -f $(ALIGNEDHG19DIR)/alignment3-missing.lmiss
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
+	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
 $(GENOTYPESDIR)/ALL.subjects: $(GENOTYPESDIR)/hg19plus.done
@@ -356,7 +356,7 @@ $(HARDYSUBGROUPS): $(ALIGNEDHG19DIR)/alignment3-%-hardy.done: $(GENOTYPESDIR)/%.
 	for EXT in hwe hwe.gz log; do rm -f $(subst .done,,$@).$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(ALIGNEDHG19DIR)/alignment3 --keep $< --hardy --out $(subst .done,,$@) >/dev/null
 	gzip -f $(subst .done,,$@).hwe
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
+	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
 #qcreport.tex: $(ALIGNEDHG19DIR)/alignment3-missing.lmiss $(ALIGNEDHG19DIR)/alignment3-freq.frq $(ALIGNEDHG19DIR)/alignment3-hardy.hwe $(HARDYSUBGROUPS)
