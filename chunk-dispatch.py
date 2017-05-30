@@ -38,21 +38,21 @@ parser.add_option('--chunkMb', help = 'chunk size in Mb (default 4)', metavar = 
 parser.add_option('--windowMb', help = 'flanking window size in Mb (default 0.25)', metavar = 'MB',
                   type = 'float', dest = 'windowMb',
                   default = 0.25)
-parser.add_option('--minimacopt', help = 'options for minimac (default \'--rounds 5 --states 200\')', metavar = 'OPTIONS',
+parser.add_option('--minimacopt', help = 'options for minimac (default \'--rounds 5 --states 200 --probs\')', metavar = 'OPTIONS',
                   type = 'string', dest = 'minimacopt',
-                  default = '--rounds 5 --states 200') #'--rounds 5 --states 200 --probs'
+                  default = '--rounds 5 --states 200 --probs')
 parser.add_option('--minimac-path', help = 'full path to minimac executable', metavar = 'MINIMAC',
                   type = 'string', dest = 'minimac',
-                  default = '/GWD/appbase/projects/statgen/GXapp/minimac/minimac')
+                  default = '/GWD/appbase/projects/GXapp/minimac/minimac2-2014.9.15')
 parser.add_option('--sleep', help = 'sleep until phased haplotypes are done',
                   action = 'store_true', dest = 'sleep',
                   default = False)
 parser.add_option('--submit', help = 'command to submit job script', metavar = 'COMMAND',
                   type = 'string', dest = 'submit',
-                  default = '/GWD/bioinfo/common/scripts/abq-sub')
-parser.add_option('--submitqueue', help = '--queue option argument (default dl580)', metavar = 'QUEUE',
+                  default = '/GWD/bioinfo/projects/lsf/SGE/6.2u5/bin/lx24-amd64/qsub')
+parser.add_option('--submitqueue', help = '--queue option argument (default rhel7)', metavar = 'QUEUE',
                   type = 'string', dest = 'submitqueue',
-                  default = 'dl580')
+                  default = 'rhel7')
 parser.add_option('--submitopt', help = 'append other option(s) for submit command', metavar = 'OPTION',
                   action = 'append', type = 'string', dest = 'submitopt', default = [])
 #recommend ['--memory=4g']
@@ -60,7 +60,7 @@ parser.add_option('--submitopt', help = 'append other option(s) for submit comma
 (options, args) = parser.parse_args()
 
 logging.basicConfig(stream=sys.stdout, format='%(levelname)s:%(message)s', level=logging.DEBUG)
-logging.info('minimac chunk dispatcher v0.3 Toby.x.Johnson@gsk.com')
+logging.info('minimac chunk dispatcher v0.4 Toby.x.Johnson@gsk.com')
 
 if len(options.chr) == 0:
     logging.info('Target imputation of chromosomes 1-22 (default)')
@@ -96,7 +96,7 @@ if not os.path.isfile(options.submit):
     sys.exit(1)
 
 if not options.submitqueue in ['', 'any', 'default']:
-    options.submitopt.append('--queue=' + options.submitqueue)
+    options.submitopt.extend(['-q', options.submitqueue])
 logging.info('Submit command is [ ' + options.submit + ' ' + ' '.join(options.submitopt) + ' ]')
 
 ###
@@ -283,8 +283,8 @@ while True:
             
                 if options.dispatch:
                     subprocess.call([options.submit] + options.submitopt + \
-                                    ['--outfile=' + os.path.join(jobdir, job_name + '.out'), \
-                                     '--errfile=' + os.path.join(jobdir, job_name + '.err'), \
+                                    ['-o', os.path.join(jobdir, job_name + '.out'), \
+                                     '-e', os.path.join(jobdir, job_name + '.err'), \
                                      os.path.join(jobdir, job_name + '.sh')])
                     jobs_disp.append(job_name)
 
