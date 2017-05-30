@@ -55,7 +55,7 @@ parser.add_option('--submitqueue', help = '--queue option argument (default rhel
                   default = 'rhel7')
 parser.add_option('--submitopt', help = 'append other option(s) for submit command', metavar = 'OPTION',
                   action = 'append', type = 'string', dest = 'submitopt', default = [])
-#recommend ['--memory=4g']
+#recommend ['-l h_data=4G']
 #but not hard coded as default optins because then there would be no way to override 
 (options, args) = parser.parse_args()
 
@@ -269,6 +269,7 @@ while True:
                 job_fh.write('/bin/echo \'Chunk imputation starting\' $(/bin/date)\n')
                 job_fh.write('/bin/rm -f ' + os.path.join(imputedir, job_name + '.done') + '\n')
                 job_fh.write(options.minimac + ' --vcfReference --refHaps ' + ref_file \
+                             + ' --vcfchr ' + chrom \
                              + ' --vcfstart ' + chunk_start + ' --vcfend ' + chunk_end + ' --vcfwindow ' + minimac_window \
                              + ' --haps ' + os.path.join(phasedir, phased + '.gz') \
                              + ' --snps ' + os.path.join(phasedir, phased + '.snps.gz') \
