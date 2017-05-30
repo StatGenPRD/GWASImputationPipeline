@@ -228,7 +228,7 @@ $(GENOTYPESDIR)/tmp4.done: $(GENOTYPESDIR)/tmp3.done
 $(GENOTYPESDIR)/tmp5.done: $(GENOTYPESDIR)/tmp4.done
 	for EXT in $(PLINKEXT); do rm -f $(subst .done,,$@).$$EXT; done
 	$(CONSENSUSMERGE) $(GENOTYPESDIR)/tmp4 $(GENOTYPESDIR)/tmp5 >$(GENOTYPESDIR)/tmp5.log
-	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
+	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
 $(GENOTYPESDIR)/hg19plus.done: $(GENOTYPESDIR)/tmp5.done
