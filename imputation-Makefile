@@ -145,7 +145,7 @@ HAPIUROPTS = --win 100
 
 # setting DISPLAY=:1.0 gives R a dummy display so that png() works
 # but Xlib still depends on fonts...
-R = /GWD/bioinfo/tools/bin/R
+RUNR = /GWD/bioinfo/projects/RD-TSci-Software/CB/linuxbrew/bin/R --vanilla
 ADDGENETICMAP = $(GXAPP)/imputation/add-genetic-map-hg19.R
 PDFLATEX = /opt/TWWfsw/TWW/bin/pdflatex
 QCREPORT = qcreport.Rnw
@@ -314,7 +314,7 @@ $(ALIGNEDHG19DIR)/alignment3.done: $(ALIGNEDHG19DIR)/alignment2.done
 	for EXT in $(PLINKEXT); do rm -f $(subst .done,,$@).$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(ALIGNEDHG19DIR)/alignment2 --make-bed --out $(ALIGNEDHG19DIR)/alignment3 >/dev/null
 	cp -f $(subst .done,.bim,$@) $(subst .done,.bim.backup,$@)
-	$(R) --vanilla --args $(subst .done,.bim,$@) <$(ADDGENETICMAP) >/dev/null 2>/dev/null
+	$(RUNR) --args $(subst .done,.bim,$@) <$(ADDGENETICMAP) >/dev/null 2>/dev/null
 	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
@@ -370,7 +370,7 @@ $(HARDYSUBGROUPS): $(ALIGNEDHG19DIR)/alignment3-%-hardy.done: $(GENOTYPESDIR)/%.
 ## THIS WILL BE TOTALLY BROKEN BY GZIPPED $(ALIGNEDHG19)
 
 $(ALIGNEDHG19DIR)/report-match.csv: $(ALIGNEDHG19DIR)/raw-freq.done $(ALIGNEDHG19DIR)/snplist.snplist $(ALIGNEDHG19) $(ALIGNEDHG19DIR)/alignment3-freq.done
-	$(R) --vanilla --args $(ALIGNEDHG19DIR) <$(ALIGNMENTREPORT) >$(ALIGNEDHG19DIR)/report.out 2>$(ALIGNEDHG19DIR)/report.err
+	$(RUNR) --args $(ALIGNEDHG19DIR) <$(ALIGNMENTREPORT) >$(ALIGNEDHG19DIR)/report.out 2>$(ALIGNEDHG19DIR)/report.err
 
 # By chromosome, convert to PLINK .ped/.map -> MERLIN .ped.gz/.dat.gz
 $(PEDGZHG19): $(ALIGNEDHG19DIR)/chr%.ped.gz: $(ALIGNEDHG19DIR)/alignment3.done
@@ -389,7 +389,7 @@ $(PHASEDHAPIURHG19): $(PHASEDHAPIURHG19DIR)/chr%.gz: $(ALIGNEDHG19DIR)/alignment
 	mkdir -p $(PHASEDHAPIURHG19DIR)
 	$(PLINK) $(PLINKOPTS) --bfile $(ALIGNEDHG19DIR)/alignment3 --chr $(subst $(PHASEDHAPIURHG19DIR)/chr,,$(subst .gz,,$@)) \
 		--make-bed --out $(subst .gz,,$@) >/dev/null
-#	$(R) --vanilla --args $(subst .gz,.bim,$@) <$(ADDGENETICMAP) >/dev/null 2>/dev/null
+#	$(RUNR) --args $(subst .gz,.bim,$@) <$(ADDGENETICMAP) >/dev/null 2>/dev/null
 	$(HAPIUR) $(HAPIUROPTS) --plink $(subst .gz,,$@) --out $(subst .gz,,$@)-hapiur >$(subst .gz,,$@)-hapiur.progress
 # dummy code for consensus from 3 MC runs
 #	$(HAPIUR) $(HAPIUROPTS) --plink $(subst .gz,,$@) --out $(subst .gz,,$@)-hapiur2 >$(subst .gz,,$@)-hapiur2.progress

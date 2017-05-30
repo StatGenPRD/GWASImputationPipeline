@@ -53,7 +53,7 @@ GXPUBLIC = /GWD/appbase/projects/statgen/RD-MDD-GX_PUBLIC
 # paths to executables, and customisable options
 TOUCH = /bin/touch
 PLINK = /GWD/bioinfo/projects/RD-TSci-Software/CB/linuxbrew/bin/plink2
-RUNR = /GWD/bioinfo/tools/bin/R --vanilla
+RUNR = /GWD/bioinfo/projects/RD-TSci-Software/CB/linuxbrew/bin/R --vanilla
 DGVDATA = $(GXPUBLIC)/DGV
 GCTA = $(GXAPP)/gcta/gcta_1.13/gcta64
 KING = $(GXAPP)/king/king
