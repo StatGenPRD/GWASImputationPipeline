@@ -52,7 +52,7 @@ GXPUBLIC = /GWD/appbase/projects/statgen/RD-MDD-GX_PUBLIC
 
 # paths to executables, and customisable options
 TOUCH = /bin/touch
-PLINK = $(GXAPP)/plink/plink-1.07/plink --noweb
+PLINK = /GWD/bioinfo/projects/RD-TSci-Software/CB/linuxbrew/bin/plink2
 RUNR = /GWD/bioinfo/tools/bin/R --vanilla
 DGVDATA = $(GXPUBLIC)/DGV
 GCTA = $(GXAPP)/gcta/gcta_1.13/gcta64
@@ -85,14 +85,14 @@ $(STUDY)-freq.done: $(STUDY).bed $(STUDY).bim $(STUDY).fam
 	for EXT in frq frq.gz log; do rm -f $(STUDY)-freq.$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(STUDY) --freq --out $(STUDY)-freq >/dev/null
 	gzip -f $(STUDY)-freq.frq
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
+	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
 $(STUDY)-missing.done: $(STUDY).bed $(STUDY).bim $(STUDY).fam
 	for EXT in imiss lmiss log; do rm -f $(STUDY)-missing.$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(STUDY) --missing --out $(STUDY)-missing >/dev/null
 	gzip -f $(STUDY)-missing.lmiss
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
+	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
 ###
@@ -110,7 +110,7 @@ $(STUDY).exclude1: $(STUDY)-freq.done $(STUDY)-missing.done
 $(STUDY)-clean1.done: $(STUDY).bed $(STUDY).bim $(STUDY).fam $(STUDY).exclude1
 	for EXT in bed bim fam log; do rm -f $(STUDY)-clean1.$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(STUDY) --exclude $(STUDY).exclude1 --make-bed --out $(STUDY)-clean1 >/dev/null
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
+	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
 ###
@@ -122,7 +122,7 @@ $(STUDY)-clean1-missing.done: $(STUDY)-clean1.done
 	for EXT in imiss lmiss log; do rm -f $(STUDY)-clean1-missing.$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(STUDY)-clean1 --missing --out $(STUDY)-clean1-missing >/dev/null
 	gzip -f $(STUDY)-clean1-missing.lmiss
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
+	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
 $(STUDY).remove1: $(STUDY)-clean1-missing.done
@@ -134,7 +134,7 @@ $(STUDY).remove1: $(STUDY)-clean1-missing.done
 $(STUDY)-clean2.done: $(STUDY)-clean1.done $(STUDY).remove1
 	for EXT in bed bim fam log; do rm -f $(STUDY)-clean2.$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(STUDY)-clean1 --remove $(STUDY).remove1 --make-bed --out $(STUDY)-clean2 >/dev/null
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
+	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
 ###
@@ -146,7 +146,7 @@ $(STUDY)-clean2-freq.done: $(STUDY)-clean2.done
 	for EXT in frq frq.gz log; do rm -f $(STUDY)-clean2-freq.$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(STUDY)-clean2 --freq --out $(STUDY)-clean2-freq >/dev/null
 	gzip -f $(STUDY)-clean2-freq.frq
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
+	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
 # nothing depends on this...
@@ -154,7 +154,7 @@ $(STUDY)-clean2-hardy.done: $(STUDY)-clean2.done
 	for EXT in hwe hwe.gz log; do rm -f $(STUDY)-clean2-hardy.$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(STUDY)-clean2 --hardy --out $(STUDY)-clean2-hardy >/dev/null
 	gzip -f $(STUDY)-clean2-hardy.hwe
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
+	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
 $(DEMODIR)ALL.subjects: $(STUDY).fam
@@ -165,14 +165,14 @@ $(HARDYSUBGROUPS): $(STUDY)-clean2-%-hardy.done: $(DEMODIR)%.subjects $(STUDY)-c
 	for EXT in hwe hwe.gz log; do rm -f $(subst .done,,$@).$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(STUDY)-clean2 --keep $< --hardy --out $(subst .done,,$@) >/dev/null
 	gzip -f $(subst .done,,$@).hwe
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
+	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
 $(STUDY)-clean2-missing.done: $(STUDY)-clean2.done
 	for EXT in imiss lmiss log; do rm -f $(STUDY)-clean2-missing.$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(STUDY)-clean2 --missing --out $(STUDY)-clean2-missing >/dev/null
 	gzip -f $(STUDY)-clean2-missing.lmiss
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
+	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
 $(STUDY).exclude2: $(STUDY)-clean2-freq.done $(HARDYSUBGROUPS) $(STUDY)-clean2-missing.done
@@ -208,7 +208,7 @@ $(STUDY)-clean3.done: $(STUDY)-clean1.done $(STUDY).exclude2 $(STUDY)-autosomal.
 	$(PLINK) $(PLINKOPTS) --bfile $(STUDY)-clean3-chr23  --chr 23 --from-bp 2699520  --to-bp 154931043 --filter-males --make-bed --out $(STUDY)-clean3-chr23-M >/dev/null
 	awk '$$4 < 2699520 || $$4 > 154931043 {print $$2}' $(STUDY)-clean3-chr23-F.bim |awk 'NF>0' >$(STUDY)-chr23-par.extract
 	$(PLINK) $(PLINKOPTS) --bfile $(STUDY)-clean3-chr23  --extract $(STUDY)-chr23-par.extract --make-bed --out $(STUDY)-clean3-chr23-par >/dev/null; true
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
+	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
 ###
@@ -232,7 +232,7 @@ $(STUDY)-kinship.done: $(STUDY)-clean3.done
 $(STUDY)-clean1-check-sex.done: $(STUDY)-clean1.done
 	for EXT in sexcheck log; do rm -f $(STUDY)-clean1-check-sex.$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(STUDY)-clean1 --check-sex --out $(STUDY)-clean1-check-sex >/dev/null
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
+	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
 $(STUDY).remove2: $(STUDY)-clean1-missing.done $(STUDY)-clean1-check-sex.done $(STUDY)-kinship.done
@@ -267,7 +267,7 @@ endif
 $(STUDY)-indep.done: $(STUDY)-clean3.done $(STUDY).remove1 $(STUDY)-inversion.exclude $(STUDY)-autosomal.extract
 	for EXT in prune.in prune.out log; do rm -f $(STUDY)-indep.$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(STUDY)-clean3 --maf 0.05 --remove $(STUDY).remove1 --exclude $(STUDY)-inversion.exclude --extract $(STUDY)-autosomal.extract --indep 50 5 2 --out $(STUDY)-indep >/dev/null
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
+	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
 $(STUDY)-make-grm.done: $(STUDY).bed $(STUDY).bim $(STUDY).fam $(STUDY)-indep.done
@@ -301,7 +301,7 @@ $(STUDY)-pca.done: $(STUDY)-make-grm.done
 $(STUDY)-working.done: $(STUDY).bed $(STUDY).bim $(STUDY).fam $(STUDY)-indep.done
 	for EXT in bed bim fam; do rm -f $(STUDY)-working.$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(STUDY) --extract $(STUDY)-indep.prune.in --make-bed --out $(STUDY)-working >/dev/null
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
+	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
 #$(ADMIXRES): $(STUDY)-working.$(ADMIXTUREK).Q: $(STUDY)-working.bed
@@ -315,7 +315,7 @@ $(STUDY)-working.done: $(STUDY).bed $(STUDY).bim $(STUDY).fam $(STUDY)-indep.don
 
 $(STUDY)-genome.done: $(STUDY).bed $(STUDY).bim $(STUDY).fam $(STUDY)-indep.done
 	$(PLINK) $(PLINKOPTS) --bfile $(STUDY) --extract $(STUDY)-indep.prune.in --genome --min 0.09375 --out $(STUDY)-genome >/dev/null
-	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
+	grep -E '(Start time)|(End time)' $(subst .done,.log,$@) >$@
 	@$(TOUCH) $@
 
 ## can add --keep for ancestry groups
