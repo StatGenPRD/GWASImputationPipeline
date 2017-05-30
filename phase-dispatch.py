@@ -35,8 +35,8 @@ parser.add_option('-p', '--phased', help = 'directory for phased haplotypes (def
 parser.add_option('-n', '--name', help = 'job name (default chr[chr] or JOBNAME for chr 23)', metavar = 'JOBNAME',
                   type = 'string', dest = 'jobname',
                   default = '')
-parser.add_option('--plinkopt', help = 'options for PLINK (default \'--noweb\')', metavar = 'OPTIONS',
-                  type = 'string', dest = 'plinkopt', default = '--noweb')
+parser.add_option('--plinkopt', help = 'options for PLINK', metavar = 'OPTIONS',
+                  type = 'string', dest = 'plinkopt', default = '')
 parser.add_option('--hapiur-win', help = 'HAPI-UR window size (default 0 = automatic)', metavar = 'INTEGER',
                   type = 'int', dest = 'hapiurwin',
                   default = 0)
@@ -45,7 +45,7 @@ parser.add_option('--machopt', help = 'options for mach (default \'--rounds 20 -
                   default = '--rounds 20 --states 200')
 parser.add_option('--plink-path', help = 'full path to plink binary', metavar = 'PLINK',
                   type = 'string', dest = 'plink',
-                  default = '/GWD/appbase/projects/statgen/GXapp/plink/plink-1.07/plink')
+                  default = '/GWD/bioinfo/projects/RD-TSci-Software/CB/linuxbrew/bin/plink')
 parser.add_option('--hapiur-path', help = 'full path to hapiur binary', metavar = 'HAPIUR',
                   type = 'string', dest = 'hapiur',
                   default = '/GWD/appbase/projects/statgen/GXapp/hapiur/hapi-ur')
@@ -57,10 +57,10 @@ parser.add_option('--mach-path', help = 'full path to mach binary', metavar = 'M
                   default = '/GWD/appbase/projects/statgen/GXapp/mach1/mach1')
 parser.add_option('--submit', help = 'command to submit job script', metavar = 'COMMAND',
                   type = 'string', dest = 'submit',
-                  default = '/GWD/bioinfo/common/scripts/abq-sub')
-parser.add_option('--submitqueue', help = '--queue option argument (default dl580)', metavar = 'QUEUE',
+                  default = '/GWD/bioinfo/projects/lsf/SGE/6.2u5/bin/lx24-amd64/qsub')
+parser.add_option('--submitqueue', help = '--queue option argument (default rhel7)', metavar = 'QUEUE',
                   type = 'string', dest = 'submitqueue',
-                  default = 'dl580')
+                  default = 'rhel7')
 parser.add_option('--submitmem', help = 'job memory (Mbyte/marker, default 0.1)', metavar = 'VALUE',
                   type = 'float', dest = 'submitmem',
                   default = 0.1)
@@ -107,10 +107,10 @@ if not os.path.isfile(options.submit):
     sys.exit(1)
 
 if not options.submitqueue in ['', 'any', 'default']:
-    options.submitopt.append('--queue=' + options.submitqueue)
+    options.submitopt.extend(['-q', options.submitqueue])
 if options.submitmem > 0:
-    logging.info('Submit command is [ ' + options.submit + ' ' + ' '.join(options.submitopt) + ' --memory=XXg ]')
-    logging.info(' where XXg is >= ' + str(options.submitmem) + ' Mbyte/marker')
+    logging.info('Submit command is [ ' + options.submit + ' ' + ' '.join(options.submitopt) + ' -l h_data=xxG ]')
+    logging.info(' where xxG is >= ' + str(options.submitmem) + ' Mbyte/marker')
 else:
     logging.info('submit command is [ ' + options.submit +  ' '.join(options.submitopt) + ' ]')
     
@@ -338,14 +338,14 @@ for chrom in chrom_set:
 
         thisopt = list(options.submitopt) # must not modify options for other chromosomes
         if options.submitmem > 0:
-            submitmem = '--memory=' + str(max(int(float(chrom_counts[chrom])*options.submitmem*1e-3) + 1, 2)) + 'g'
-            logging.info(job_name + ' appending option for submit command [ ' + submitmem + ' ]')
-            thisopt.append(submitmem)
+            submitmem = ['-l', 'h_data=' + str(max(int(float(chrom_counts[chrom])*options.submitmem*1e-3) + 1, 2)) + 'G']
+            logging.info(job_name + ' appending option for submit command [ ' + ' '.join(submitmem) + ' ]')
+            thisopt.extend(submitmem)
         
         if options.dispatch:
             subprocess.call([options.submit] + thisopt + \
-                            ['--outfile=' + os.path.join(jobdir, job_name + '.out'), \
-                             '--errfile=' + os.path.join(jobdir, job_name + '.err'), \
+                            ['-o', os.path.join(jobdir, job_name + '.out'), \
+                             '-e', os.path.join(jobdir, job_name + '.err'), \
                              os.path.join(jobdir, job_name + '.sh')])
             jobs_disp.append(job_name)
 
