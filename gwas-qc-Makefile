@@ -51,6 +51,7 @@ GXPUBLIC = /GWD/appbase/projects/statgen/RD-MDD-GX_PUBLIC
 ####DO NOT EDIT BELOW THIS LINE
 
 # paths to executables, and customisable options
+TOUCH = /bin/touch
 PLINK = $(GXAPP)/plink/plink-1.07/plink --noweb
 RUNR = /GWD/bioinfo/tools/bin/R --vanilla
 DGVDATA = $(GXPUBLIC)/DGV
@@ -85,14 +86,14 @@ $(STUDY)-freq.done: $(STUDY).bed $(STUDY).bim $(STUDY).fam
 	$(PLINK) $(PLINKOPTS) --bfile $(STUDY) --freq --out $(STUDY)-freq >/dev/null
 	gzip -f $(STUDY)-freq.frq
 	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
-	@touch $@
+	@$(TOUCH) $@
 
 $(STUDY)-missing.done: $(STUDY).bed $(STUDY).bim $(STUDY).fam
 	for EXT in imiss lmiss log; do rm -f $(STUDY)-missing.$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(STUDY) --missing --out $(STUDY)-missing >/dev/null
 	gzip -f $(STUDY)-missing.lmiss
 	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
-	@touch $@
+	@$(TOUCH) $@
 
 ###
 ### exclude1 and clean1 - make a working dataset for calculating subject missingness
@@ -104,13 +105,13 @@ $(STUDY).exclude1: $(STUDY)-freq.done $(STUDY)-missing.done
 	zcat $(STUDY)-freq.frq.gz | tail -n +2 | awk '$$5 == "NA" || $$5 == 0 {print $$2,"monomorphic"}' >$@.reason
 	zcat $(STUDY)-missing.lmiss.gz | tail -n +2 | awk '$$5 > $(LMISSTHRESH1) {print $$2,"lmiss=" $$5}' >>$@.reason
 	awk '{print $$1}' $@.reason >$@
-	touch $@ $@.reason
+	@$(TOUCH) $@ $@.reason
 
 $(STUDY)-clean1.done: $(STUDY).bed $(STUDY).bim $(STUDY).fam $(STUDY).exclude1
 	for EXT in bed bim fam log; do rm -f $(STUDY)-clean1.$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(STUDY) --exclude $(STUDY).exclude1 --make-bed --out $(STUDY)-clean1 >/dev/null
 	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
-	@touch $@
+	@$(TOUCH) $@
 
 ###
 ### remove1 and clean2 - remove individuals with >IMISSTHRESH1 missing data
@@ -122,19 +123,19 @@ $(STUDY)-clean1-missing.done: $(STUDY)-clean1.done
 	$(PLINK) $(PLINKOPTS) --bfile $(STUDY)-clean1 --missing --out $(STUDY)-clean1-missing >/dev/null
 	gzip -f $(STUDY)-clean1-missing.lmiss
 	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
-	@touch $@
+	@$(TOUCH) $@
 
 $(STUDY).remove1: $(STUDY)-clean1-missing.done
 	rm -f $@ $@.reason
 	tail -n +2 $(STUDY)-clean1-missing.imiss | awk '$$6 > $(IMISSTHRESH1) {print $$1,$$2,"imiss=" $$6}' >$@.reason
 	awk '{print $$1,$$2}' $@.reason >$@
-	touch $@ $@.reason
+	@$(TOUCH) $@ $@.reason
 
 $(STUDY)-clean2.done: $(STUDY)-clean1.done $(STUDY).remove1
 	for EXT in bed bim fam log; do rm -f $(STUDY)-clean2.$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(STUDY)-clean1 --remove $(STUDY).remove1 --make-bed --out $(STUDY)-clean2 >/dev/null
 	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
-	@touch $@
+	@$(TOUCH) $@
 
 ###
 ### SNP QC metrics, evaluated in clean2 data
@@ -146,7 +147,7 @@ $(STUDY)-clean2-freq.done: $(STUDY)-clean2.done
 	$(PLINK) $(PLINKOPTS) --bfile $(STUDY)-clean2 --freq --out $(STUDY)-clean2-freq >/dev/null
 	gzip -f $(STUDY)-clean2-freq.frq
 	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
-	@touch $@
+	@$(TOUCH) $@
 
 # nothing depends on this...
 $(STUDY)-clean2-hardy.done: $(STUDY)-clean2.done
@@ -154,7 +155,7 @@ $(STUDY)-clean2-hardy.done: $(STUDY)-clean2.done
 	$(PLINK) $(PLINKOPTS) --bfile $(STUDY)-clean2 --hardy --out $(STUDY)-clean2-hardy >/dev/null
 	gzip -f $(STUDY)-clean2-hardy.hwe
 	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
-	@touch $@
+	@$(TOUCH) $@
 
 $(DEMODIR)ALL.subjects: $(STUDY).fam
 	mkdir -p $(DEMODIR)
@@ -165,14 +166,14 @@ $(HARDYSUBGROUPS): $(STUDY)-clean2-%-hardy.done: $(DEMODIR)%.subjects $(STUDY)-c
 	$(PLINK) $(PLINKOPTS) --bfile $(STUDY)-clean2 --keep $< --hardy --out $(subst .done,,$@) >/dev/null
 	gzip -f $(subst .done,,$@).hwe
 	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
-	@touch $@
+	@$(TOUCH) $@
 
 $(STUDY)-clean2-missing.done: $(STUDY)-clean2.done
 	for EXT in imiss lmiss log; do rm -f $(STUDY)-clean2-missing.$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(STUDY)-clean2 --missing --out $(STUDY)-clean2-missing >/dev/null
 	gzip -f $(STUDY)-clean2-missing.lmiss
 	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
-	@touch $@
+	@$(TOUCH) $@
 
 $(STUDY).exclude2: $(STUDY)-clean2-freq.done $(HARDYSUBGROUPS) $(STUDY)-clean2-missing.done
 	rm -f $@ $@.reason
@@ -182,7 +183,7 @@ $(STUDY).exclude2: $(STUDY)-clean2-freq.done $(HARDYSUBGROUPS) $(STUDY)-clean2-m
 		zcat $(STUDY)-clean2-$$SUBGROUP-hardy.hwe.gz | tail -n +2 | awk '$$3 == "ALL" && $$9 < $(HWTHRESH) {print $$2,"hwe'$$SUBGROUP'=" $$9}' >>$@.reason ;\
 	}; done
 	awk '{print $$1}' $@.reason >$@
-	touch $@ $@.reason
+	@$(TOUCH) $@ $@.reason
 
 
 ###
@@ -208,7 +209,7 @@ $(STUDY)-clean3.done: $(STUDY)-clean1.done $(STUDY).exclude2 $(STUDY)-autosomal.
 	awk '$$4 < 2699520 || $$4 > 154931043 {print $$2}' $(STUDY)-clean3-chr23-F.bim |awk 'NF>0' >$(STUDY)-chr23-par.extract
 	$(PLINK) $(PLINKOPTS) --bfile $(STUDY)-clean3-chr23  --extract $(STUDY)-chr23-par.extract --make-bed --out $(STUDY)-clean3-chr23-par >/dev/null; true
 	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
-	@touch $@
+	@$(TOUCH) $@
 
 ###
 ### relatedness - all pairwise comparisons so do not apply remove1
@@ -221,7 +222,7 @@ $(STUDY)-kinship.done: $(STUDY)-clean3.done
 	$(KING) -b $(STUDY)-clean3.bed --kinship --prefix $(STUDY)-kinship >$(STUDY)-kinship.log
 	for EXT in kin kin0; do gzip -f $(STUDY)-kinship.$$EXT; done
 	grep -E '(starts at)|(ends at)' $(subst .done,.log,$@) >$@
-	touch $@
+	@$(TOUCH) $@
 
 ## should we add recipe to actually remove cryptic duplicates and relatives...
 
@@ -232,7 +233,7 @@ $(STUDY)-clean1-check-sex.done: $(STUDY)-clean1.done
 	for EXT in sexcheck log; do rm -f $(STUDY)-clean1-check-sex.$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(STUDY)-clean1 --check-sex --out $(STUDY)-clean1-check-sex >/dev/null
 	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
-	@touch $@
+	@$(TOUCH) $@
 
 $(STUDY).remove2: $(STUDY)-clean1-missing.done $(STUDY)-clean1-check-sex.done $(STUDY)-kinship.done
 	rm -f $@ $@.reason
@@ -241,7 +242,7 @@ $(STUDY).remove2: $(STUDY)-clean1-missing.done $(STUDY)-clean1-check-sex.done $(
 	zcat $(STUDY)-kinship.kin0.gz | tail -n +2 | awk '$$8 >= $(KINTHRESH) {print $$1,$$2,"kinship=" $$8}' >>$@.reason
 	zcat $(STUDY)-kinship.kin0.gz | tail -n +2 | awk '$$8 >= $(KINTHRESH) {print $$3,$$4,"kinship=" $$8}' >>$@.reason
 	awk '{print $$1,$$2}' $@.reason >$@
-	touch $@ $@.reason
+	@$(TOUCH) $@ $@.reason
 
 ###
 ### make pruned working set of SNPs for PCA
@@ -267,17 +268,17 @@ $(STUDY)-indep.done: $(STUDY)-clean3.done $(STUDY).remove1 $(STUDY)-inversion.ex
 	for EXT in prune.in prune.out log; do rm -f $(STUDY)-indep.$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(STUDY)-clean3 --maf 0.05 --remove $(STUDY).remove1 --exclude $(STUDY)-inversion.exclude --extract $(STUDY)-autosomal.extract --indep 50 5 2 --out $(STUDY)-indep >/dev/null
 	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
-	@touch $@
+	@$(TOUCH) $@
 
 $(STUDY)-make-grm.done: $(STUDY).bed $(STUDY).bim $(STUDY).fam $(STUDY)-indep.done
 	for EXT in grm.bin grm.N.bin grm.id log; do rm -f $(STUDY)-make-grm.$$EXT; done
 	$(GCTA) --bfile $(STUDY) --extract $(STUDY)-indep.prune.in --make-grm-bin --out $(STUDY)-make-grm >$(STUDY)-make-grm.log
-	touch $@
+	@$(TOUCH) $@
 
 $(STUDY)-pca.done: $(STUDY)-make-grm.done
 	for EXT in eigenval eigenvec log; do rm -f $(STUDY)-pca.$$EXT; done
 	$(GCTA) --grm-bin $(STUDY)-make-grm --pca 10 --out $(STUDY)-pca >$(STUDY)-pca.log
-	touch $@
+	@$(TOUCH) $@
 
 ###
 ### dev targets we don't currently use
@@ -288,20 +289,20 @@ $(STUDY)-pca.done: $(STUDY)-make-grm.done
 #$(STUDY)-make-grm-all.done: $(STUDY)-clean3.bed $(STUDY)-clean3.bim $(STUDY)-clean3.fam
 #	for EXT in grm.bin grm.N.bin grm.id log; do rm -f $(STUDY)-make-grm-all.$$EXT; done
 #	$(GCTA) --bfile $(STUDY)-clean3 --make-grm-bin --out $(STUDY)-make-grm-all >$(STUDY)-make-grm-all.log
-#	touch $@
+#	@$(TOUCH) $@
 
 # conflicts with hard-coded rule 
 #$(GRMSUBGROUPS): $(STUDY)-make-grm-%.done: $(DEMODIR)%.subjects $(STUDY)-clean3.done
 #	for EXT in grm.gz grm.id log; do rm -f $(subst .done,,$@).$$EXT; done
 #	$(GCTA) --bfile $(STUDY)-clean3 --keep $< --make-grm-bin --out $(subst .done,,$@) >$(subst .done,.log,$@)
-#	touch $@
+#	@$(TOUCH) $@
 
 
 $(STUDY)-working.done: $(STUDY).bed $(STUDY).bim $(STUDY).fam $(STUDY)-indep.done
 	for EXT in bed bim fam; do rm -f $(STUDY)-working.$$EXT; done
 	$(PLINK) $(PLINKOPTS) --bfile $(STUDY) --extract $(STUDY)-indep.prune.in --make-bed --out $(STUDY)-working >/dev/null
 	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
-	@touch $@
+	@$(TOUCH) $@
 
 #$(ADMIXRES): $(STUDY)-working.$(ADMIXTUREK).Q: $(STUDY)-working.bed
 #	$(ADMIXTURE) -j8 $< $(ADMIXTUREK)
@@ -315,7 +316,7 @@ $(STUDY)-working.done: $(STUDY).bed $(STUDY).bim $(STUDY).fam $(STUDY)-indep.don
 $(STUDY)-genome.done: $(STUDY).bed $(STUDY).bim $(STUDY).fam $(STUDY)-indep.done
 	$(PLINK) $(PLINKOPTS) --bfile $(STUDY) --extract $(STUDY)-indep.prune.in --genome --min 0.09375 --out $(STUDY)-genome >/dev/null
 	grep -E '(Analysis started)|(Analysis finished)' $(subst .done,.log,$@) >$@
-	@touch $@
+	@$(TOUCH) $@
 
 ## can add --keep for ancestry groups
 
